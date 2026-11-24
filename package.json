@@ -1,10 +1,10 @@
 {
-  "name": "@embra/template",
+  "name": "@embra/disposable",
   "version": "0.1.0",
-  "description": "Collection of common utilities.",
+  "description": "Explicit disposal scopes for predictable resource cleanup, built for AI agents.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/embrajs/template.git"
+    "url": "git+https://github.com/embrajs/disposable.git"
   },
   "type": "module",
   "main": "./dist/index.cjs",
@@ -42,9 +42,7 @@
     "build:min": "NODE_ENV=production MINIFY=true node scripts/build.ts && echo '' && gzip-size dist/index.mjs dist/index.cjs",
     "release": "commit-and-tag-version"
   },
-  "keywords": [
-    "template"
-  ],
+  "keywords": [],
   "maintainers": [
     {
       "name": "CRIMX",
