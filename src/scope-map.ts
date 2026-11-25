@@ -8,14 +8,18 @@ import {
   ScopeBase,
   setMapEntry,
 } from "./core.ts";
+import { registerDevScope } from "./dev.ts";
 import type { DisposableLike, ScopeMap, ScopeOptions } from "./types.ts";
 import type { ScopeEntry } from "./utils.ts";
 
 class ScopeMapImpl<K> extends ScopeBase implements ScopeMap<K>, MapScopeState<K> {
-  items_: Map<K, ScopeEntry> | null = null;
+  items_?: Map<K, ScopeEntry> | null;
 
   constructor(options?: ScopeOptions) {
-    super(drainMap, options, __DEV__ ? "scopeMap" : undefined);
+    super(drainMap);
+    if (__DEV__) {
+      registerDevScope(this, "scopeMap", options?.name);
+    }
   }
 
   get size(): number {
@@ -30,9 +34,7 @@ class ScopeMapImpl<K> extends ScopeBase implements ScopeMap<K>, MapScopeState<K>
     }
     const existing = this.items_?.get(key);
     if (!existing || existing.f || existing.v !== value) {
-      if (existing) {
-        flushMapKey(this, key);
-      }
+      flushMapKey(this, key);
       setMapEntry(this, key, { v: value });
     }
     return value;
@@ -54,7 +56,7 @@ class ScopeMapImpl<K> extends ScopeBase implements ScopeMap<K>, MapScopeState<K>
   }
 
   keys(): IterableIterator<K> {
-    return ((this.items_ ?? [] as K[]) as unknown as Map<K, unknown>).keys();
+    return ((this.items_ ?? ([] as K[])) as unknown as Map<K, unknown>).keys();
   }
 
   remove(key: K): unknown {

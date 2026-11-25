@@ -1,12 +1,4 @@
-import {
-  clearDevChildren,
-  getDevDisposedMessage,
-  linkDevValue,
-  markDevDisposed,
-  registerDevScope,
-  unlinkDevValue,
-} from "./dev.ts";
-import type { ScopeKind, ScopeOptions } from "./types.ts";
+import { clearDevChildren, getDevDisposedMessage, linkDevValue, markDevDisposed, unlinkDevValue } from "./dev.ts";
 import { disposeEntry, drainEntries, type ScopeEntry, SYM_DISPOSE, SYM_ON_DISPOSE, throwErrors } from "./utils.ts";
 
 /**
@@ -15,33 +7,36 @@ import { disposeEntry, drainEntries, type ScopeEntry, SYM_DISPOSE, SYM_ON_DISPOS
  * @internal
  */
 export interface ScopeBase extends Disposable {
-  disposed_: boolean;
-  ctrl_: AbortController | null;
+  disposed_?: boolean;
+  ctrl_?: AbortController;
   readonly disposed: boolean;
   readonly signal: AbortSignal;
   dispose(this: void): void;
 }
 
 /** @internal */
-export const ScopeBase: new (
-  drain: (s: any) => unknown[] | undefined,
-  options?: ScopeOptions,
-  kind?: ScopeKind,
-) => ScopeBase = /* @__PURE__ */ (() => {
+export const ScopeBase: new (drain: (s: any) => unknown[] | undefined) => ScopeBase = /* @__PURE__ */ (() => {
   class Base implements ScopeBase {
-    disposed_ = false;
-    ctrl_: AbortController | null = null;
+    disposed_?: boolean;
+    ctrl_?: AbortController;
     readonly dispose: (this: void) => void;
 
-    constructor(drain: (s: any) => unknown[] | undefined, options?: ScopeOptions, kind?: ScopeKind) {
-      this.dispose = () => disposeScope(this, drain);
-      if (__DEV__) {
-        registerDevScope(this, kind as ScopeKind, options?.name);
-      }
+    constructor(drain: (s: any) => unknown[] | undefined) {
+      this.dispose = () => {
+        if (!this.disposed_) {
+          this.disposed_ = true;
+          if (__DEV__) {
+            markDevDisposed(this);
+          }
+          const errors = drain(this);
+          this.ctrl_?.abort();
+          throwErrors(errors);
+        }
+      };
     }
 
     get disposed(): boolean {
-      return this.disposed_;
+      return !!this.disposed_;
     }
 
     get signal(): AbortSignal {
@@ -62,20 +57,7 @@ export const ScopeBase: new (
  * @internal
  */
 export interface MapScopeState<K> extends ScopeBase {
-  items_: Map<K, ScopeEntry> | null;
-}
-
-/** @internal */
-export function disposeScope<S extends ScopeBase>(s: S, drain: (s: S) => unknown[] | undefined): void {
-  if (!s.disposed_) {
-    s.disposed_ = true;
-    if (__DEV__) {
-      markDevDisposed(s);
-    }
-    const errors = drain(s);
-    s.ctrl_?.abort();
-    throwErrors(errors);
-  }
+  items_?: Map<K, ScopeEntry> | null;
 }
 
 /** @internal */
@@ -88,11 +70,7 @@ export function flushScope<S extends ScopeBase>(s: S, drain: (s: S) => unknown[]
 /** @internal */
 export function assertAlive(s: ScopeBase): void {
   if (s.disposed_) {
-    let message = "disposed";
-    if (__DEV__) {
-      message = getDevDisposedMessage(s);
-    }
-    throw new ReferenceError(message);
+    throw new ReferenceError(__DEV__ ? getDevDisposedMessage(s) : "disposed");
   }
 }
 

@@ -1,5 +1,5 @@
 import { assertAlive, flushScope, type OnDisposeHook, ScopeBase } from "./core.ts";
-import { clearDevChildren, linkDevValue, unlinkDevValue } from "./dev.ts";
+import { clearDevChildren, linkDevValue, registerDevScope, unlinkDevValue } from "./dev.ts";
 import type { DisposableLike, ScopeOne, ScopeOptions } from "./types.ts";
 import { disposeEntry, isDisposable, type ScopeEntry, SYM_ON_DISPOSE } from "./utils.ts";
 
@@ -19,10 +19,13 @@ function drainOne<T>(s: ScopeOneImpl<T>): unknown[] | undefined {
 }
 
 class ScopeOneImpl<T> extends ScopeBase implements ScopeOne<T> {
-  entry_: ScopeEntry | null = null;
+  entry_?: ScopeEntry | null;
 
   constructor(options?: ScopeOptions) {
-    super(drainOne, options, __DEV__ ? "scopeOne" : undefined);
+    super(drainOne);
+    if (__DEV__) {
+      registerDevScope(this, "scopeOne", options?.name);
+    }
   }
 
   get size(): 0 | 1 {

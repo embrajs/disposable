@@ -1,5 +1,5 @@
 import { assertAlive, flushScope, type OnDisposeHook, ScopeBase } from "./core.ts";
-import { clearDevChildren, linkDevValue } from "./dev.ts";
+import { clearDevChildren, linkDevValue, registerDevScope } from "./dev.ts";
 import type { DisposableLike, Scope, ScopeOptions } from "./types.ts";
 import { createIterableScope, drainEntries, type ScopeEntry, SYM_ON_DISPOSE } from "./utils.ts";
 
@@ -15,10 +15,13 @@ function drainArray(s: ScopeImpl): unknown[] | undefined {
 }
 
 class ScopeImpl extends ScopeBase implements Scope {
-  items_: ScopeEntry[] | null = null;
+  items_?: ScopeEntry[] | null;
 
   constructor(options?: ScopeOptions) {
-    super(drainArray, options, __DEV__ ? "scope" : undefined);
+    super(drainArray);
+    if (__DEV__) {
+      registerDevScope(this, "scope", options?.name);
+    }
   }
 
   get size(): number {
@@ -30,14 +33,7 @@ class ScopeImpl extends ScopeBase implements Scope {
     if (value != null) {
       const entry: ScopeEntry = { v: value };
       const hook = (value as { dispose?: Record<symbol, OnDisposeHook> }).dispose?.[SYM_ON_DISPOSE];
-      if (
-        hook &&
-        !hook(() => {
-          if (this.items_) {
-            this.items_.splice(this.items_.lastIndexOf(entry), 1);
-          }
-        })
-      ) {
+      if (hook && !hook(() => this.items_?.splice((this.items_ as ScopeEntry[]).lastIndexOf(entry), 1))) {
         return value;
       }
       (this.items_ ??= []).push(entry);

@@ -8,14 +8,18 @@ import {
   ScopeBase,
   setMapEntry,
 } from "./core.ts";
+import { registerDevScope } from "./dev.ts";
 import type { DisposableLike, ScopeOptions, ScopeSet } from "./types.ts";
 import { createIterableScope, type ScopeEntry } from "./utils.ts";
 
 class ScopeSetImpl extends ScopeBase implements ScopeSet, MapScopeState<unknown> {
-  items_: Map<unknown, ScopeEntry> | null = null;
+  items_?: Map<unknown, ScopeEntry> | null;
 
   constructor(options?: ScopeOptions) {
-    super(drainMap, options, __DEV__ ? "scopeSet" : undefined);
+    super(drainMap);
+    if (__DEV__) {
+      registerDevScope(this, "scopeSet", options?.name);
+    }
   }
 
   get size(): number {

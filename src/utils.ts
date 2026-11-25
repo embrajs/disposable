@@ -56,7 +56,7 @@ export interface ScopeEntry {
  * Run a single entry's cleanup function.
  * @internal
  */
-export const disposeEntry = (entry: ScopeEntry): void => (entry.f ? entry.f(entry.v) : dispose(entry.v));
+export const disposeEntry = (entry: ScopeEntry): void => (entry.f ?? dispose)(entry.v);
 
 /**
  * Run an iterable of entries in iteration order, collecting any thrown errors.
@@ -93,7 +93,7 @@ export function createIterableScope<T extends { use(v: DisposableLike | null | u
   itemsOrOptions?: Iterable<DisposableLike | null | undefined> | { name?: string },
   maybeOptions?: { name?: string },
 ): T {
-  const isIter = itemsOrOptions != null && isFn((itemsOrOptions as Iterable<unknown>)[Symbol.iterator]);
+  const isIter = isFn((itemsOrOptions as Iterable<unknown> | undefined)?.[Symbol.iterator]);
   const s = new Ctor(isIter ? maybeOptions : (itemsOrOptions as { name?: string } | undefined));
   if (isIter) {
     for (const item of itemsOrOptions as Iterable<DisposableLike | null | undefined>) {
