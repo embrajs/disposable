@@ -1,19 +1,19 @@
 import {
   drainMap,
-  flushMap,
   flushMapKey,
-  guardDisposed,
+  flushScope,
   type MapScopeState,
   moveMap,
   removeMapEntry,
   ScopeBase,
   setMapEntry,
+  throwDisposed,
 } from "./core.ts";
 import type { DisposableLike, ScopeMap, ScopeOptions } from "./types.ts";
 import type { ScopeEntry } from "./utils.ts";
 
 class ScopeMapImpl<K> extends ScopeBase implements ScopeMap<K>, MapScopeState<K> {
-  items_?: Map<K, ScopeEntry>;
+  items_: Map<K, ScopeEntry> | null = null;
 
   constructor(options?: ScopeOptions) {
     super(drainMap, options);
@@ -28,30 +28,38 @@ class ScopeMapImpl<K> extends ScopeBase implements ScopeMap<K>, MapScopeState<K>
   }
 
   use<T extends DisposableLike | null | undefined>(key: K, value: T): T {
-    guardDisposed(this, value);
+    if (this.disposed_) {
+      throwDisposed(this);
+    }
     if (value == null) {
       flushMapKey(this, key);
       return value;
     }
     const existing = this.items_?.get(key);
     if (!existing || existing.f || !Object.is(existing.v, value)) {
-      flushMapKey(this, key);
+      if (existing) {
+        flushMapKey(this, key);
+      }
       setMapEntry(this, key, { v: value });
     }
     return value;
   }
 
   adopt<T>(key: K, value: T, onDispose: (value: T) => void): T {
-    guardDisposed(this, value, onDispose);
+    if (this.disposed_) {
+      throwDisposed(this);
+    }
     flushMapKey(this, key);
-    setMapEntry(this, key, { v: value, f: onDispose });
+    (this.items_ ??= new Map()).set(key, { v: value, f: onDispose });
     return value;
   }
 
   defer(key: K, onDispose: () => void): void {
-    guardDisposed(this, onDispose);
+    if (this.disposed_) {
+      throwDisposed(this);
+    }
     flushMapKey(this, key);
-    setMapEntry(this, key, { v: onDispose });
+    (this.items_ ??= new Map()).set(key, { v: onDispose });
   }
 
   get(key: K): unknown {
@@ -70,8 +78,12 @@ class ScopeMapImpl<K> extends ScopeBase implements ScopeMap<K>, MapScopeState<K>
     return removeMapEntry(this, key)?.v;
   }
 
-  flush(...args: [key?: K]): void {
-    flushMap(this, args);
+  flush(key?: K): void {
+    if (key !== undefined) {
+      flushMapKey(this, key);
+    } else {
+      flushScope(this, drainMap);
+    }
   }
 
   move(): ScopeMap<K> {
@@ -82,6 +94,4 @@ class ScopeMapImpl<K> extends ScopeBase implements ScopeMap<K>, MapScopeState<K>
 /**
  * Create a keyed refreshable disposal scope. Replacing an existing key disposes its previous resource first.
  */
-export function scopeMap<K = unknown>(options?: ScopeOptions): ScopeMap<K> {
-  return new ScopeMapImpl<K>(options);
-}
+export const scopeMap = <K = unknown>(options?: ScopeOptions): ScopeMap<K> => new ScopeMapImpl<K>(options);

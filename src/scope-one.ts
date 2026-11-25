@@ -1,31 +1,26 @@
-import { attachChild, detachChild, flushScope, guardDisposed, moveScope, ScopeBase } from "./core.ts";
+import { attachChild, detachChild, flushScope, moveScope, ScopeBase, throwDisposed } from "./core.ts";
 import type { DisposableLike, ScopeOne, ScopeOptions } from "./types.ts";
 import { disposeEntry, isDisposable, type ScopeEntry } from "./utils.ts";
 
-function setOneEntry<T>(s: ScopeOneImpl<T>, entry: ScopeEntry): void {
-  s.entry_ = entry;
-  attachChild(s, entry, () => {
-    s.entry_ = undefined;
-  });
-}
+const unlinkOne = <T>(s: ScopeOneImpl<T>): void => {
+  s.entry_ = null;
+};
 
 function drainOne<T>(s: ScopeOneImpl<T>): unknown[] | undefined {
   const entry = s.entry_;
-  if (!entry) {
-    return undefined;
+  if (entry) {
+    s.entry_ = null;
+    detachChild(entry);
+    try {
+      disposeEntry(entry);
+    } catch (err) {
+      return [err];
+    }
   }
-  s.entry_ = undefined;
-  detachChild(entry);
-  try {
-    disposeEntry(entry);
-  } catch (err) {
-    return [err];
-  }
-  return undefined;
 }
 
 class ScopeOneImpl<T> extends ScopeBase implements ScopeOne<T> {
-  entry_?: ScopeEntry;
+  entry_: ScopeEntry | null = null;
 
   constructor(options?: ScopeOptions) {
     super(drainOne, options);
@@ -40,33 +35,50 @@ class ScopeOneImpl<T> extends ScopeBase implements ScopeOne<T> {
   }
 
   get current(): T | undefined {
-    return this.entry_ ? (this.entry_.v as T) : undefined;
+    return this.entry_?.v as T | undefined;
   }
 
   use<V extends (T & DisposableLike) | null | undefined>(value: V): V {
-    guardDisposed(this, value);
+    if (this.disposed_) {
+      throwDisposed(this);
+    }
+    const existing = this.entry_;
     if (value == null) {
-      this.flush();
+      if (existing) {
+        this.flush();
+      }
       return value;
     }
-    if (!this.entry_ || this.entry_.f || !Object.is(this.entry_.v, value)) {
-      this.flush();
-      setOneEntry(this, { v: value });
+    if (!existing || existing.f || !Object.is(existing.v, value)) {
+      if (existing) {
+        this.flush();
+      }
+      const entry: ScopeEntry = { v: value };
+      this.entry_ = entry;
+      attachChild(this, entry, unlinkOne);
     }
     return value;
   }
 
   adopt<V extends T>(value: V, onDispose: (value: V) => void): V {
-    guardDisposed(this, value, onDispose);
-    this.flush();
-    setOneEntry(this, { v: value, f: onDispose });
+    if (this.disposed_) {
+      throwDisposed(this);
+    }
+    if (this.entry_) {
+      this.flush();
+    }
+    this.entry_ = { v: value, f: onDispose };
     return value;
   }
 
   defer(onDispose: () => void): void {
-    guardDisposed(this, onDispose);
-    this.flush();
-    setOneEntry(this, { v: onDispose });
+    if (this.disposed_) {
+      throwDisposed(this);
+    }
+    if (this.entry_) {
+      this.flush();
+    }
+    this.entry_ = { v: onDispose };
   }
 
   is(value: unknown): boolean {
@@ -75,12 +87,11 @@ class ScopeOneImpl<T> extends ScopeBase implements ScopeOne<T> {
 
   remove(): T | undefined {
     const entry = this.entry_;
-    if (!entry) {
-      return undefined;
+    if (entry) {
+      this.entry_ = null;
+      detachChild(entry);
+      return entry.v as T;
     }
-    this.entry_ = undefined;
-    detachChild(entry);
-    return entry.v as T;
   }
 
   flush(): void {
@@ -92,9 +103,10 @@ class ScopeOneImpl<T> extends ScopeBase implements ScopeOne<T> {
     moveScope(this, next);
     const entry = this.entry_;
     if (entry) {
-      this.entry_ = undefined;
+      this.entry_ = null;
       detachChild(entry);
-      setOneEntry(next, entry);
+      next.entry_ = entry;
+      attachChild(next, entry, unlinkOne);
     }
     return next;
   }

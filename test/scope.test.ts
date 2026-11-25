@@ -192,36 +192,25 @@ describe("scope", () => {
     expect(parent.size).toBe(0);
   });
 
-  it("cleans up passed resources and throws ReferenceError when used after dispose", () => {
+  it("throws ReferenceError when used after dispose", () => {
     const s = scope({ name: "closed" });
     s.dispose();
 
     const fn = vi.fn();
     expect(() => s.use(fn)).toThrow(ReferenceError);
-    expect(fn).toHaveBeenCalledTimes(1);
+    expect(fn).not.toHaveBeenCalled();
 
     expect(() => s.use(null)).toThrow(ReferenceError);
 
     const adoptCleanup = vi.fn();
     expect(() => s.adopt(123, adoptCleanup)).toThrow(ReferenceError);
-    expect(adoptCleanup).toHaveBeenCalledWith(123);
+    expect(adoptCleanup).not.toHaveBeenCalled();
 
     const deferred = vi.fn();
     expect(() => s.defer(deferred)).toThrow(ReferenceError);
-    expect(deferred).toHaveBeenCalledTimes(1);
+    expect(deferred).not.toHaveBeenCalled();
 
     expect(() => s.move()).toThrow(ReferenceError);
-
-    // Preserves cause if emergency cleanup throws
-    try {
-      s.defer(() => {
-        throw new Error("cleanup-fail");
-      });
-      expect.unreachable();
-    } catch (err) {
-      expect(err).toBeInstanceOf(ReferenceError);
-      expect((err as ReferenceError).cause).toBeInstanceOf(Error);
-    }
   });
 
   it("includes disposal stack in dev mode and omits it in prod mode", () => {
@@ -242,12 +231,12 @@ describe("scope", () => {
     const prodMoved = prod.move();
     prodMoved.dispose();
     expect(prodChild2.disposed).toBe(true);
-    expect(() => prod.defer(() => {})).toThrow("Cannot use a disposed scope");
+    expect(() => prod.defer(() => {})).toThrow("disposed");
 
     // Scope created in prod mode, then disposed & accessed in dev mode (no dev meta)
     const prodNoMeta = scope();
     setDevMode(true);
     prodNoMeta.dispose();
-    expect(() => prodNoMeta.defer(() => {})).toThrow("Cannot use a disposed scope");
+    expect(() => prodNoMeta.defer(() => {})).toThrow("disposed");
   });
 });

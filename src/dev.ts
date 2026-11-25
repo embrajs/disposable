@@ -2,7 +2,7 @@ import type { ScopeKind } from "./types.ts";
 
 /**
  * Dev metadata attached to scopes when `__DEV__` is enabled.
- * @hidden
+ * @internal
  */
 export interface DevScopeMeta {
   readonly kind: ScopeKind;
@@ -14,16 +14,25 @@ export interface DevScopeMeta {
 }
 
 /**
- * Hook bundle consumed by `@embra/disposable/debug`.
- * @hidden
+ * Shared dev registry stored on `globalThis` so `@embra/disposable` and `@embra/disposable/debug`
+ * share state across separate bundle entry points without polluting public exports.
+ * @internal
  */
-export interface DevDebugHooks {
-  getMeta(scope: object): DevScopeMeta | undefined;
-  addLeakTracker(tracker: Set<object>): () => void;
+export interface DevRegistry {
+  readonly meta: WeakMap<object, DevScopeMeta>;
+  readonly leakTrackers: Set<Set<object>>;
 }
 
-const metaMap = new WeakMap<object, DevScopeMeta>();
-const leakTrackers = new Set<Set<object>>();
+const DEV_REGISTRY_KEY = /* @__PURE__ */ Symbol.for("@embra/disposable/dev");
+
+/** @internal */
+export function getDevRegistry(): DevRegistry {
+  const globals = globalThis as Record<symbol, DevRegistry | undefined>;
+  return (globals[DEV_REGISTRY_KEY] ??= {
+    meta: new WeakMap(),
+    leakTrackers: new Set(),
+  });
+}
 
 function captureStack(): string {
   const stack = new Error().stack as string;
@@ -34,7 +43,8 @@ function captureStack(): string {
 
 /** @internal */
 export function registerDevScope(scope: object, kind: ScopeKind, name?: string): void {
-  metaMap.set(scope, {
+  const { meta, leakTrackers } = getDevRegistry();
+  meta.set(scope, {
     kind,
     name,
     createdAt: captureStack(),
@@ -47,10 +57,11 @@ export function registerDevScope(scope: object, kind: ScopeKind, name?: string):
 
 /** @internal */
 export function markDevDisposed(scope: object, reason: "disposed" | "moved" = "disposed"): void {
-  const meta = metaMap.get(scope);
-  if (meta) {
-    meta.disposedAt = captureStack();
-    meta.disposedReason = reason;
+  const { meta, leakTrackers } = getDevRegistry();
+  const entry = meta.get(scope);
+  if (entry) {
+    entry.disposedAt = captureStack();
+    entry.disposedReason = reason;
   }
   for (const tracker of leakTrackers) {
     tracker.delete(scope);
@@ -59,37 +70,21 @@ export function markDevDisposed(scope: object, reason: "disposed" | "moved" = "d
 
 /** @internal */
 export function linkDevChild(parent: object, child: object): void {
-  metaMap.get(parent)?.children.add(child);
+  getDevRegistry().meta.get(parent)?.children.add(child);
 }
 
 /** @internal */
 export function unlinkDevChild(parent: object, child: object): void {
-  metaMap.get(parent)?.children.delete(child);
+  getDevRegistry().meta.get(parent)?.children.delete(child);
 }
 
 /** @internal */
 export function getDevDisposedMessage(scope: object): string {
-  const meta = metaMap.get(scope);
-  if (!meta) {
-    return "Cannot use a disposed scope";
+  const entry = getDevRegistry().meta.get(scope);
+  if (!entry) {
+    return "disposed";
   }
-  const label = meta.name ? `${meta.kind} "${meta.name}"` : meta.kind;
-  const action = meta.disposedReason === "moved" ? "moved" : "disposed";
-  return `Cannot use ${action} ${label}.\nOriginally ${action} at:\n${meta.disposedAt}`;
-}
-
-/** @hidden */
-export function _getDevHooks(): DevDebugHooks | undefined {
-  if (__DEV__) {
-    return {
-      getMeta: (scope) => metaMap.get(scope),
-      addLeakTracker: (tracker) => {
-        leakTrackers.add(tracker);
-        return () => {
-          leakTrackers.delete(tracker);
-        };
-      },
-    };
-  }
-  return undefined;
+  const label = entry.name ? `${entry.kind} "${entry.name}"` : entry.kind;
+  const action = entry.disposedReason === "moved" ? "moved" : "disposed";
+  return `Cannot use ${action} ${label}.\nOriginally ${action} at:\n${entry.disposedAt}`;
 }

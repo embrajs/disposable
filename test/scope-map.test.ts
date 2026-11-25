@@ -112,22 +112,22 @@ describe("scopeMap", () => {
     empty2.dispose();
   });
 
-  it("cleans up and throws ReferenceError after dispose", () => {
+  it("throws ReferenceError after dispose", () => {
     const sm = scopeMap<string>();
     sm.dispose();
 
     const fn = vi.fn();
     expect(() => sm.use("a", fn)).toThrow(ReferenceError);
-    expect(fn).toHaveBeenCalledTimes(1);
+    expect(fn).not.toHaveBeenCalled();
 
     expect(() => sm.use("a", null)).toThrow(ReferenceError);
 
     const clean = vi.fn();
     expect(() => sm.adopt("a", 1, clean)).toThrow(ReferenceError);
-    expect(clean).toHaveBeenCalledWith(1);
+    expect(clean).not.toHaveBeenCalled();
 
     const def = vi.fn();
     expect(() => sm.defer("a", def)).toThrow(ReferenceError);
-    expect(def).toHaveBeenCalledTimes(1);
+    expect(def).not.toHaveBeenCalled();
   });
 });

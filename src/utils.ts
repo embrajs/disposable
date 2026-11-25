@@ -14,24 +14,22 @@ export const isFn = (v: unknown): v is (...args: any[]) => any => typeof v === "
 /**
  * Check whether a value is a {@link DisposableLike} (a function, a TC39 `Disposable`, or an `IDisposable`).
  */
-export function isDisposable(value: unknown): value is DisposableLike {
-  return isFn(value) || isFn((value as Disposable)?.[SYM_DISPOSE]) || isFn((value as IDisposable)?.dispose);
-}
+export const isDisposable = (value: unknown): value is DisposableLike =>
+  isFn(value) || isFn((value as Disposable)?.[SYM_DISPOSE]) || isFn((value as IDisposable)?.dispose);
 
 /**
  * Dispose a {@link DisposableLike} value. No-op for `null` or `undefined`.
  * Errors thrown during disposal are propagated rather than swallowed.
  */
 export function dispose(value: unknown): void {
-  if (!value) {
-    return;
-  }
-  if (isFn(value)) {
-    (value as Disposer)();
-  } else if (isFn((value as Disposable)[SYM_DISPOSE])) {
-    (value as Disposable)[SYM_DISPOSE]();
-  } else if (isFn((value as IDisposable).dispose)) {
-    (value as IDisposable).dispose();
+  if (value) {
+    if (isFn(value)) {
+      (value as Disposer)();
+    } else if (isFn((value as Disposable)[SYM_DISPOSE])) {
+      (value as Disposable)[SYM_DISPOSE]();
+    } else if (isFn((value as IDisposable).dispose)) {
+      (value as IDisposable).dispose();
+    }
   }
 }
 
@@ -44,21 +42,19 @@ export interface ScopeEntry {
   v: unknown;
   /** Optional custom cleanup callback from `adopt()`. */
   f?: (value: any) => void;
-  /** Optional parent-detach callback registered on child scopes. */
-  u?: () => void;
+  /** Parent scope when this entry holds a live child scope. */
+  p?: unknown;
+  /** Static unlink callback for removing this entry from its parent on child disposal. */
+  r?: (parent: any, entry: ScopeEntry) => void;
+  /** Map key when stored in a Map-backed scope. */
+  k?: unknown;
 }
 
 /**
  * Run a single entry's cleanup function.
  * @internal
  */
-export function disposeEntry(entry: ScopeEntry): void {
-  if (entry.f) {
-    entry.f(entry.v);
-  } else {
-    dispose(entry.v);
-  }
-}
+export const disposeEntry = (entry: ScopeEntry): void => (entry.f ? entry.f(entry.v) : dispose(entry.v));
 
 /**
  * Run an array of entries in LIFO order, collecting any thrown errors.
@@ -82,9 +78,7 @@ export function drainEntries(entries: ScopeEntry[]): unknown[] | undefined {
  */
 export function throwErrors(errors: unknown[] | undefined): void {
   if (errors) {
-    throw errors.length === 1
-      ? errors[0]
-      : new AggregateError(errors, `${errors.length} errors occurred during disposal`);
+    throw errors.length === 1 ? errors[0] : new AggregateError(errors);
   }
 }
 

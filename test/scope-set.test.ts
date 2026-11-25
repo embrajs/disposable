@@ -115,22 +115,22 @@ describe("scopeSet", () => {
     empty2.dispose();
   });
 
-  it("cleans up and throws ReferenceError after dispose", () => {
+  it("throws ReferenceError after dispose", () => {
     const ss = scopeSet();
     ss.dispose();
 
     const fn = vi.fn();
     expect(() => ss.use(fn)).toThrow(ReferenceError);
-    expect(fn).toHaveBeenCalledTimes(1);
+    expect(fn).not.toHaveBeenCalled();
 
     expect(() => ss.use(undefined)).toThrow(ReferenceError);
 
     const clean = vi.fn();
     expect(() => ss.adopt("x", clean)).toThrow(ReferenceError);
-    expect(clean).toHaveBeenCalledWith("x");
+    expect(clean).not.toHaveBeenCalled();
 
     const def = vi.fn();
     expect(() => ss.defer(def)).toThrow(ReferenceError);
-    expect(def).toHaveBeenCalledTimes(1);
+    expect(def).not.toHaveBeenCalled();
   });
 });

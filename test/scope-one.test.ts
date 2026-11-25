@@ -27,33 +27,36 @@ describe("scopeOne", () => {
     so.use(d2);
     expect(order).toEqual(["d1"]);
 
-    // Null clears slot
+    // Null clears slot (and is a no-op when already empty)
+    expect(so.use(null)).toBeNull();
     expect(so.use(null)).toBeNull();
     expect(order).toEqual(["d1", "d2"]);
     expect(so.size).toBe(0);
     expect(so.current).toBeUndefined();
 
-    // Falsy adopted value (0) is properly tracked
+    // Falsy adopted value (0) is properly tracked, and replacing via adopt flushes previous
     expect(so.adopt(0, (n) => order.push(`adopt:${n}`))).toBe(0);
     expect(so.size).toBe(1);
     expect(so.current).toBe(0);
     expect(so.is(0)).toBe(true);
+    expect(so.adopt(1, (n) => order.push(`adopt:${n}`))).toBe(1);
+    expect(order).toEqual(["d1", "d2", "adopt:0"]);
 
     // defer replaces adopted value
     so.defer(() => order.push("defer"));
-    expect(order).toEqual(["d1", "d2", "adopt:0"]);
+    expect(order).toEqual(["d1", "d2", "adopt:0", "adopt:1"]);
 
     so.dispose();
     expect(so.disposed).toBe(true);
     expect(so.signal.aborted).toBe(true);
     expect(so.size).toBe(0);
-    expect(order).toEqual(["d1", "d2", "adopt:0", "defer"]);
+    expect(order).toEqual(["d1", "d2", "adopt:0", "adopt:1", "defer"]);
 
     {
       using o = scopeOne();
       o.defer(() => order.push("using"));
     }
-    expect(order).toEqual(["d1", "d2", "adopt:0", "defer", "using"]);
+    expect(order).toEqual(["d1", "d2", "adopt:0", "adopt:1", "defer", "using"]);
 
     // dispose when empty
     const empty = scopeOne();
@@ -110,22 +113,22 @@ describe("scopeOne", () => {
     e2.dispose();
   });
 
-  it("cleans up and throws ReferenceError after dispose", () => {
+  it("throws ReferenceError after dispose", () => {
     const so = scopeOne();
     so.dispose();
 
     const fn = vi.fn();
     expect(() => so.use(fn)).toThrow(ReferenceError);
-    expect(fn).toHaveBeenCalledTimes(1);
+    expect(fn).not.toHaveBeenCalled();
 
     expect(() => so.use(undefined)).toThrow(ReferenceError);
 
     const clean = vi.fn();
     expect(() => so.adopt("v", clean)).toThrow(ReferenceError);
-    expect(clean).toHaveBeenCalledWith("v");
+    expect(clean).not.toHaveBeenCalled();
 
     const def = vi.fn();
     expect(() => so.defer(def)).toThrow(ReferenceError);
-    expect(def).toHaveBeenCalledTimes(1);
+    expect(def).not.toHaveBeenCalled();
   });
 });

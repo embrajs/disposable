@@ -61,10 +61,13 @@ const devBundle = await readFile(join(outdir, "index.dev.mjs"), "utf8");
 const debugProdBundle = await readFile(join(outdir, "debug.mjs"), "utf8");
 const debugDevBundle = await readFile(join(outdir, "debug.dev.mjs"), "utf8");
 
-assert(!/process\.env|__DEV__|registerDevScope|captureStack/.test(prodBundle), "Dev diagnostics leaked into index.mjs");
+assert(
+  !/process\.env|__DEV__|registerDevScope|captureStack|getDevRegistry/.test(prodBundle),
+  "Dev diagnostics leaked into index.mjs",
+);
 assert(!/process\.env|__DEV__/.test(devBundle), "Unresolved env token leaked into index.dev.mjs");
 assert(devBundle.includes("Originally"), "Dev diagnostics missing from index.dev.mjs");
-assert(debugProdBundle.includes('"@embra/disposable"'), "debug.mjs must externally import @embra/disposable");
-assert(debugDevBundle.includes('"@embra/disposable"'), "debug.dev.mjs must externally import @embra/disposable");
+assert(!/process\.env|__DEV__|getDevRegistry/.test(debugProdBundle), "Dev diagnostics leaked into debug.mjs");
+assert(!/process\.env|__DEV__/.test(debugDevBundle), "Unresolved env token leaked into debug.dev.mjs");
 
 await writeFile(cachePath, `${JSON.stringify(mangleCache, null, 2)}\n`);

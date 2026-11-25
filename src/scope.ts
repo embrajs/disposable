@@ -1,30 +1,25 @@
-import { attachChild, detachChild, flushScope, guardDisposed, moveScope, ScopeBase } from "./core.ts";
+import { attachChild, detachChild, flushScope, moveScope, ScopeBase, throwDisposed } from "./core.ts";
 import type { DisposableLike, Scope, ScopeOptions } from "./types.ts";
 import { createIterableScope, drainEntries, type ScopeEntry } from "./utils.ts";
 
-function pushEntry(s: ScopeImpl, entry: ScopeEntry): void {
-  const items = (s.items_ ??= []);
-  items.push(entry);
-  attachChild(s, entry, () => {
-    items.splice(items.lastIndexOf(entry), 1);
-  });
+function unlinkArray(s: ScopeImpl, entry: ScopeEntry): void {
+  const items = s.items_ as ScopeEntry[];
+  items.splice(items.lastIndexOf(entry), 1);
 }
 
 function drainArray(s: ScopeImpl): unknown[] | undefined {
   const items = s.items_;
-  if (!items || items.length === 0) {
-    s.items_ = undefined;
-    return undefined;
+  s.items_ = null;
+  if (items && items.length > 0) {
+    for (let i = 0; i < items.length; i++) {
+      detachChild(items[i]);
+    }
+    return drainEntries(items);
   }
-  s.items_ = undefined;
-  for (const entry of items) {
-    detachChild(entry);
-  }
-  return drainEntries(items);
 }
 
 class ScopeImpl extends ScopeBase implements Scope {
-  items_?: ScopeEntry[];
+  items_: ScopeEntry[] | null = null;
 
   constructor(options?: ScopeOptions) {
     super(drainArray, options);
@@ -39,22 +34,30 @@ class ScopeImpl extends ScopeBase implements Scope {
   }
 
   use<T extends DisposableLike | null | undefined>(value: T): T {
-    guardDisposed(this, value);
+    if (this.disposed_) {
+      throwDisposed(this);
+    }
     if (value != null) {
-      pushEntry(this, { v: value });
+      const entry: ScopeEntry = { v: value };
+      (this.items_ ??= []).push(entry);
+      attachChild(this, entry, unlinkArray);
     }
     return value;
   }
 
   adopt<T>(value: T, onDispose: (value: T) => void): T {
-    guardDisposed(this, value, onDispose);
-    pushEntry(this, { v: value, f: onDispose });
+    if (this.disposed_) {
+      throwDisposed(this);
+    }
+    (this.items_ ??= []).push({ v: value, f: onDispose });
     return value;
   }
 
   defer(onDispose: () => void): void {
-    guardDisposed(this, onDispose);
-    pushEntry(this, { v: onDispose });
+    if (this.disposed_) {
+      throwDisposed(this);
+    }
+    (this.items_ ??= []).push({ v: onDispose });
   }
 
   flush(): void {
@@ -66,10 +69,12 @@ class ScopeImpl extends ScopeBase implements Scope {
     moveScope(this, next);
     const items = this.items_;
     if (items) {
-      this.items_ = undefined;
-      for (const entry of items) {
+      this.items_ = null;
+      next.items_ = items;
+      for (let i = 0; i < items.length; i++) {
+        const entry = items[i];
         detachChild(entry);
-        pushEntry(next, entry);
+        attachChild(next, entry, unlinkArray);
       }
     }
     return next;

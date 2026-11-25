@@ -1,4 +1,3 @@
-export { _getDevHooks, type DevDebugHooks, type DevScopeMeta } from "./dev.ts";
 export { scope } from "./scope.ts";
 export { scopeMap } from "./scope-map.ts";
 export { scopeOne } from "./scope-one.ts";

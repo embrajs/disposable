@@ -1,18 +1,19 @@
 import {
   drainMap,
-  flushMap,
-  guardDisposed,
+  flushMapKey,
+  flushScope,
   type MapScopeState,
   moveMap,
   removeMapEntry,
   ScopeBase,
   setMapEntry,
+  throwDisposed,
 } from "./core.ts";
 import type { DisposableLike, ScopeOptions, ScopeSet } from "./types.ts";
 import { createIterableScope, type ScopeEntry } from "./utils.ts";
 
 class ScopeSetImpl extends ScopeBase implements ScopeSet, MapScopeState<unknown> {
-  items_?: Map<unknown, ScopeEntry>;
+  items_: Map<unknown, ScopeEntry> | null = null;
 
   constructor(options?: ScopeOptions) {
     super(drainMap, options);
@@ -27,7 +28,9 @@ class ScopeSetImpl extends ScopeBase implements ScopeSet, MapScopeState<unknown>
   }
 
   use<T extends DisposableLike | null | undefined>(value: T): T {
-    guardDisposed(this, value);
+    if (this.disposed_) {
+      throwDisposed(this);
+    }
     if (value != null && !this.has(value)) {
       setMapEntry(this, value, { v: value });
     }
@@ -35,17 +38,21 @@ class ScopeSetImpl extends ScopeBase implements ScopeSet, MapScopeState<unknown>
   }
 
   adopt<T>(value: T, onDispose: (value: T) => void): T {
-    guardDisposed(this, value, onDispose);
+    if (this.disposed_) {
+      throwDisposed(this);
+    }
     if (!this.has(value)) {
-      setMapEntry(this, value, { v: value, f: onDispose });
+      (this.items_ ??= new Map()).set(value, { v: value, f: onDispose });
     }
     return value;
   }
 
   defer(onDispose: () => void): void {
-    guardDisposed(this, onDispose);
+    if (this.disposed_) {
+      throwDisposed(this);
+    }
     if (!this.has(onDispose)) {
-      setMapEntry(this, onDispose, { v: onDispose });
+      (this.items_ ??= new Map()).set(onDispose, { v: onDispose });
     }
   }
 
@@ -57,8 +64,12 @@ class ScopeSetImpl extends ScopeBase implements ScopeSet, MapScopeState<unknown>
     return !!removeMapEntry(this, value);
   }
 
-  flush(...args: [value?: unknown]): void {
-    flushMap(this, args);
+  flush(value?: unknown): void {
+    if (value !== undefined) {
+      flushMapKey(this, value);
+    } else {
+      flushScope(this, drainMap);
+    }
   }
 
   move(): ScopeSet {

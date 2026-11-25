@@ -1,4 +1,5 @@
-import { _getDevHooks, type BaseScope, type ScopeKind } from "@embra/disposable";
+import { type DevScopeMeta, getDevRegistry } from "../dev.ts";
+import type { BaseScope, ScopeKind } from "../types.ts";
 
 /**
  * Non-intrusive snapshot of a disposal scope's state and child tree.
@@ -46,8 +47,10 @@ function inferKind(target: BaseScope): ScopeKind | "unknown" {
 }
 
 function inspectNode(target: BaseScope, visited: Set<object>): ScopeSnapshot {
-  const hooks = _getDevHooks();
-  const meta = hooks?.getMeta(target);
+  let meta: DevScopeMeta | undefined;
+  if (__DEV__) {
+    meta = getDevRegistry().meta.get(target);
+  }
   const children: ScopeSnapshot[] = [];
   if (meta) {
     visited.add(target);
@@ -124,9 +127,15 @@ function formatLeaks(leaks: ScopeSnapshot[]): string {
  * and reports any that remain undisposed. No-op in production builds.
  */
 export function createLeakTracker(): LeakTracker {
-  const hooks = _getDevHooks();
   const active = new Set<object>();
-  let unsub = hooks ? hooks.addLeakTracker(active) : undefined;
+  let unsub: (() => void) | undefined;
+  if (__DEV__) {
+    const { leakTrackers } = getDevRegistry();
+    leakTrackers.add(active);
+    unsub = () => {
+      leakTrackers.delete(active);
+    };
+  }
 
   const stop = (): void => {
     if (unsub) {
