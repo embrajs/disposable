@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.2](https://github.com/embrajs/disposable/compare/v0.1.1...v0.1.2) (2026-11-25)
+
+### Features
+
+* **api:** add toDisposable and timer helpers ([fb0e0ab](https://github.com/embrajs/disposable/commit/fb0e0ab437fcea859a72736fc0018f222f7dcb2c))
+
 ## 0.1.1 (2026-11-25)
 
 ### Features
