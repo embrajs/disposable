@@ -46,8 +46,12 @@
     "disposable",
     "disposable-stack",
     "scope",
+    "dispose",
     "cleanup",
+    "lifecycle",
     "resource-management",
+    "abort-signal",
+    "leak-detection",
     "symbol-dispose"
   ],
   "maintainers": [
