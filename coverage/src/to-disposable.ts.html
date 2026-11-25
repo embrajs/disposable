@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for src/detachable.ts</title>
+    <title>Code coverage report for src/to-disposable.ts</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../prettify.css" />
     <link rel="stylesheet" href="../base.css" />
@@ -30,7 +30,7 @@
             </select>
         </label>
 
-        <h1><a href="../index.html">All files</a> / <a href="index.html">src</a> detachable.ts</h1>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">src</a> to-disposable.ts</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
@@ -133,8 +133,7 @@
 <a name='L57'></a><a href='#L57'>57</a>
 <a name='L58'></a><a href='#L58'>58</a>
 <a name='L59'></a><a href='#L59'>59</a>
-<a name='L60'></a><a href='#L60'>60</a>
-<a name='L61'></a><a href='#L61'>61</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L60'></a><a href='#L60'>60</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -144,39 +143,38 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">24x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-yes">19x</span>
-<span class="cline-any cline-yes">19x</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-yes">13x</span>
-<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">15x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">24x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">24x</span>
 <span class="cline-any cline-yes">19x</span>
-<span class="cline-any cline-yes">14x</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">19x</span>
+<span class="cline-any cline-yes">24x</span>
 <span class="cline-any cline-yes">11x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -188,23 +186,22 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">23x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">24x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { aliasDevDispose } from "./dev.ts";
-import type { DetachableDisposer, Disposer } from "./types.ts";
+import type { Disposer, ManagedDisposer } from "./types.ts";
 import { isFn, SYM_DISPOSE, SYM_ON_DISPOSE } from "./utils.ts";
 &nbsp;
 /**
- * Wrap a cleanup function so calling it early automatically detaches it from any containing scopes.
- *
- * The returned function is idempotent, pre-bound, and implements `Disposer`, `IDisposable`,
- * and TC39 `Disposable` (`using`).
+ * Wrap a cleanup function into a managed disposer that is idempotent, pre-bound,
+ * implements `Disposer`, `IDisposable`, and TC39 `Disposable` (`using`), and
+ * automatically detaches from any containing scopes when invoked early.
  */
-export function detachable(onDispose: Disposer): DetachableDisposer {
+export function toDisposable(onDispose: Disposer): ManagedDisposer {
   let listeners: (() =&gt; void) | (() =&gt; void)[] | null = null;
 &nbsp;
   const fn = (): void =&gt; {
@@ -252,7 +249,7 @@ export function detachable(onDispose: Disposer): DetachableDisposer {
     aliasDevDispose(fn, onDispose);
   }
 &nbsp;
-  return fn as unknown as DetachableDisposer;
+  return fn as unknown as ManagedDisposer;
 }
 &nbsp;</pre></td></tr></table></pre>
 
@@ -261,7 +258,7 @@ export function detachable(onDispose: Disposer): DetachableDisposer {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-11-25T18:25:39.535Z
+                at 2026-11-25T18:40:04.672Z
             </div>
         <script src="../prettify.js"></script>
         <script>
