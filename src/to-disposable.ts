@@ -1,14 +1,13 @@
 import { aliasDevDispose } from "./dev.ts";
-import type { DetachableDisposer, Disposer } from "./types.ts";
+import type { Disposer, ManagedDisposer } from "./types.ts";
 import { isFn, SYM_DISPOSE, SYM_ON_DISPOSE } from "./utils.ts";
 
 /**
- * Wrap a cleanup function so calling it early automatically detaches it from any containing scopes.
- *
- * The returned function is idempotent, pre-bound, and implements `Disposer`, `IDisposable`,
- * and TC39 `Disposable` (`using`).
+ * Wrap a cleanup function into a managed disposer that is idempotent, pre-bound,
+ * implements `Disposer`, `IDisposable`, and TC39 `Disposable` (`using`), and
+ * automatically detaches from any containing scopes when invoked early.
  */
-export function detachable(onDispose: Disposer): DetachableDisposer {
+export function toDisposable(onDispose: Disposer): ManagedDisposer {
   let listeners: (() => void) | (() => void)[] | null = null;
 
   const fn = (): void => {
@@ -56,5 +55,5 @@ export function detachable(onDispose: Disposer): DetachableDisposer {
     aliasDevDispose(fn, onDispose);
   }
 
-  return fn as unknown as DetachableDisposer;
+  return fn as unknown as ManagedDisposer;
 }

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { formatTree } from "../src/debug/index.ts";
-import { detachable, scope, scopeMap, scopeOne, scopeSet } from "../src/index.ts";
+import { scope, scopeMap, scopeOne, scopeSet, toDisposable } from "../src/index.ts";
 import { setDevMode } from "./setup.ts";
 
-describe("detachable", () => {
+describe("toDisposable", () => {
   it("works standalone via call, .dispose(), and using, and is idempotent", () => {
     const fn = vi.fn();
-    const d = detachable(fn);
+    const d = toDisposable(fn);
     d();
     d();
     d.dispose();
@@ -14,14 +14,14 @@ describe("detachable", () => {
 
     const fn2 = vi.fn();
     {
-      using d2 = detachable(fn2);
+      using d2 = toDisposable(fn2);
       expect(typeof d2).toBe("function");
     }
     expect(fn2).toHaveBeenCalledTimes(1);
 
     setDevMode(false);
     const fn3 = vi.fn();
-    const d3 = detachable(fn3);
+    const d3 = toDisposable(fn3);
     d3();
     expect(fn3).toHaveBeenCalledTimes(1);
     setDevMode(true);
@@ -29,8 +29,8 @@ describe("detachable", () => {
 
   it("auto-detaches from scope, scopeSet, scopeMap, and scopeOne on early disposal", () => {
     const s = scope();
-    const d1 = s.use(detachable(vi.fn()));
-    const d2 = s.use(detachable(vi.fn()));
+    const d1 = s.use(toDisposable(vi.fn()));
+    const d2 = s.use(toDisposable(vi.fn()));
     expect(s.size).toBe(2);
     d1();
     expect(s.size).toBe(1);
@@ -39,8 +39,8 @@ describe("detachable", () => {
     expect(s.size).toBe(0);
 
     const ss = scopeSet();
-    const ds1 = ss.use(detachable(vi.fn()));
-    const ds2 = ss.use(detachable(vi.fn()));
+    const ds1 = ss.use(toDisposable(vi.fn()));
+    const ds2 = ss.use(toDisposable(vi.fn()));
     expect(ss.size).toBe(2);
     ds1();
     expect(ss.size).toBe(1);
@@ -49,8 +49,8 @@ describe("detachable", () => {
     expect(ss.has(ds2)).toBe(false);
 
     const sm = scopeMap<string>();
-    const dm1 = sm.use("a", detachable(vi.fn()));
-    sm.use("b", detachable(vi.fn()));
+    const dm1 = sm.use("a", toDisposable(vi.fn()));
+    sm.use("b", toDisposable(vi.fn()));
     expect(sm.size).toBe(2);
     dm1();
     expect(sm.size).toBe(1);
@@ -58,19 +58,19 @@ describe("detachable", () => {
     sm.dispose();
 
     const so = scopeOne();
-    const do1 = so.use(detachable(vi.fn()));
+    const do1 = so.use(toDisposable(vi.fn()));
     expect(so.size).toBe(1);
     do1();
     expect(so.size).toBe(0);
     expect(so.current).toBeUndefined();
-    so.use(detachable(vi.fn()));
+    so.use(toDisposable(vi.fn()));
     so.dispose();
     expect(so.size).toBe(0);
   });
 
   it("supports multiple containing scopes and selective remove() unsubscription", () => {
     const fn = vi.fn();
-    const d = detachable(fn);
+    const d = toDisposable(fn);
 
     const s1 = scope();
     const s2 = scopeSet();
@@ -95,7 +95,7 @@ describe("detachable", () => {
     s3.dispose();
 
     // 2-scope -> 1-scope -> 0-scope unsubscribe transitions
-    const dMulti = detachable(vi.fn());
+    const dMulti = toDisposable(vi.fn());
     const a = scopeSet();
     const b = scopeSet();
     const c = scopeSet();
@@ -112,10 +112,10 @@ describe("detachable", () => {
     c.dispose();
   });
 
-  it("supports encapsulated classes with .dispose = detachable(...) and links dev tree", () => {
+  it("supports encapsulated classes with .dispose = toDisposable(...) and links dev tree", () => {
     class Logger {
       readonly #scope = scope({ name: "Logger" });
-      readonly dispose = detachable(this.#scope.dispose);
+      readonly dispose = toDisposable(this.#scope.dispose);
     }
 
     const app = scope({ name: "App" });
@@ -130,8 +130,8 @@ describe("detachable", () => {
     app.dispose();
   });
 
-  it("skips already-disposed detachables", () => {
-    const dead = detachable(vi.fn());
+  it("skips already-disposed managed disposers", () => {
+    const dead = toDisposable(vi.fn());
     dead();
 
     const s = scope();
@@ -155,7 +155,7 @@ describe("detachable", () => {
 
   it("handles idempotent unsubscribe on the onDispose symbol protocol", () => {
     const sym = Symbol.for("@embra/detach");
-    const d = detachable(vi.fn());
+    const d = toDisposable(vi.fn());
     const hook = (d as unknown as Record<symbol, (cb: () => void) => (() => void) | false>)[sym];
     const unsub1 = hook(vi.fn()) as () => void;
     const unsub2 = hook(vi.fn()) as () => void;
@@ -165,7 +165,7 @@ describe("detachable", () => {
     unsub1(); // idempotent splice when already empty
     d();
 
-    const d2 = detachable(vi.fn());
+    const d2 = toDisposable(vi.fn());
     const hook2 = (d2 as unknown as Record<symbol, (cb: () => void) => (() => void) | false>)[sym];
     const u1 = hook2(vi.fn()) as () => void;
     u1(); // clears single listener

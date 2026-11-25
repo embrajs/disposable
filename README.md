@@ -197,27 +197,23 @@ import { scope } from "@embra/disposable";
 } // `s` is automatically disposed when leaving the block
 ```
 
-## Utilities (`dispose` / `isDisposable` / `detachable`)
+## Utilities (`dispose` / `isDisposable` / `toDisposable` / `timeout` / `interval`)
 
 ```ts
-import { detachable, dispose, isDisposable, scope } from "@embra/disposable";
+import { dispose, interval, isDisposable, scope, timeout, toDisposable } from "@embra/disposable";
 
 if (isDisposable(resource)) {
   dispose(resource);
 }
 
 // Wrap a cleanup function so calling it early automatically detaches it from containing scopes
-function timeout(ms: number, fn: () => void) {
-  const stop = detachable(() => clearTimeout(id));
-  const id = setTimeout(() => {
-    stop();
-    fn();
-  }, ms);
-  return stop;
-}
+const stop = toDisposable(() => console.log("cleaned up"));
 
 const s = scope();
-s.use(timeout(1000, () => console.log("done")));
+// One-shot timeout auto-detaches from `s` when it fires; both timers cancel on `s.dispose()`
+s.use(timeout(() => console.log("once"), 1000));
+s.use(interval(() => console.log("tick"), 500));
+s.use(stop);
 ```
 
 ## Debugging (`@embra/disposable/debug`)

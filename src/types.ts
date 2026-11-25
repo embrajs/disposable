@@ -7,7 +7,7 @@ export type Disposer = () => void;
  * A callable, idempotent disposer that automatically detaches itself from any containing scopes
  * when invoked early. Implements {@link Disposer}, {@link IDisposable}, and TC39 `Disposable`.
  */
-export interface DetachableDisposer extends IDisposable, Disposable {
+export interface ManagedDisposer extends IDisposable, Disposable {
   (this: void): void;
   dispose(this: void): void;
 }

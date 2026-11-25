@@ -49,7 +49,7 @@ activeRoom.adopt(new WebSocket("wss://example.com/rooms/general"), (w) => w.clos
 - Keep scopes private (`#scope` or closure) and expose only `dispose` / `[Symbol.dispose]`.
 - `s.dispose` is pre-bound (`(this: void) => void`) and safe to pass detached (e.g. `return s.dispose` in React `useEffect` or `@embra/reactivity` `watch`).
 - `use(null)` / `use(undefined)` is a no-op on `scope`/`scopeSet`, and flushes the key/slot on `scopeMap`/`scopeOne`.
-- Nesting via `parent.use(child)` (or `parent.use(child.dispose)`) cascades parent disposal to children, and links them in `@embra/disposable/debug` trees even when the child scope is encapsulated behind a `.dispose` property. Use `detachable(fn)` when a self-completing resource (e.g. `setTimeout`) or encapsulated class (`readonly dispose = detachable(this.#scope.dispose)`) should automatically detach from its containing scopes when disposed early. Use `scopeSet`, `scopeMap`, or `scopeOne` when entries need to be removed or replaced dynamically.
+- Nesting via `parent.use(child)` (or `parent.use(child.dispose)`) cascades parent disposal to children, and links them in `@embra/disposable/debug` trees even when the child scope is encapsulated behind a `.dispose` property. Use `toDisposable(fn)` when a self-completing resource or encapsulated class (`readonly dispose = toDisposable(this.#scope.dispose)`) should automatically detach from its containing scopes when disposed early. Use `timeout(fn, ms?)` / `interval(fn, ms?)` for managed timers that auto-detach when triggered or cancelled early. Use `scopeSet`, `scopeMap`, or `scopeOne` when entries need to be removed or replaced dynamically.
 - `s.signal` creates an `AbortController` on first access, aborts on `dispose()`, and returns an aborted signal if accessed after disposal.
 
 ```ts
@@ -67,24 +67,19 @@ class App {
 }
 ```
 
-## 3. `using` & `detachable()`
+## 3. `using`, `toDisposable()` & Timers
 
-All scopes (and `detachable`) implement `[Symbol.dispose]`. Use `detachable(fn)` when a self-completing resource or encapsulated class should automatically detach from its containing scopes when disposed early:
+All scopes, `toDisposable()`, `timeout()`, and `interval()` implement `[Symbol.dispose]`:
 
 ```ts
-import { detachable, scope } from "@embra/disposable";
-
-function timeout(ms: number, fn: () => void) {
-  const stop = detachable(() => clearTimeout(id));
-  const id = setTimeout(() => {
-    stop();
-    fn();
-  }, ms);
-  return stop;
-}
+import { interval, scope, timeout, toDisposable } from "@embra/disposable";
 
 using s = scope({ name: "App" });
-s.use(timeout(1000, () => console.log("done")));
+s.use(timeout(() => console.log("once"), 1000)); // auto-detaches after firing
+s.use(interval(() => console.log("tick"), 500));
+
+const custom = s.use(toDisposable(() => console.log("custom cleanup")));
+custom(); // runs cleanup and detaches from `s`
 ```
 
 ## 4. Debugging & Leak Detection (`@embra/disposable/debug`)

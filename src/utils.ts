@@ -50,7 +50,7 @@ export interface ScopeEntry {
   v: unknown;
   /** Optional custom cleanup callback from `adopt()`. */
   f?: (value: any) => void;
-  /** Optional unsubscribe callback for `detachable` / `SYM_ON_DISPOSE` hooks. */
+  /** Optional unsubscribe callback for `toDisposable` / `SYM_ON_DISPOSE` hooks. */
   u?: () => void;
 }
 

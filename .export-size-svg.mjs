@@ -34,8 +34,8 @@ export default defineConfig({
       code: "export { scope, scopeOne, scopeSet, scopeMap } from './src'",
     },
     {
-      title: "{ dispose, isDisposable }",
-      code: "export { dispose, isDisposable } from './src'",
+      title: "{ dispose, isDisposable, toDisposable, timeout, interval }",
+      code: "export { dispose, isDisposable, toDisposable, timeout, interval } from './src'",
     },
   ],
 });
