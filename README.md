@@ -38,7 +38,6 @@ npm add @embra/disposable
 
 - Or use the plain-text reference [llms.txt](https://embrajs.github.io/disposable/llms.txt) (also bundled at `node_modules/@embra/disposable/llms.txt`).
 
-
 ## Quick Start
 
 Collect disposers, disposables, and raw resources in a scope, then dispose them all together:
