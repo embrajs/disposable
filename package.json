@@ -12,6 +12,11 @@
       "types": "./dist/index.d.mts",
       "development": "./dist/index.dev.mjs",
       "default": "./dist/index.mjs"
+    },
+    "./debug": {
+      "types": "./dist/debug.d.mts",
+      "development": "./dist/debug.dev.mjs",
+      "default": "./dist/debug.mjs"
     }
   },
   "sideEffects": false,
@@ -35,7 +40,14 @@
     "check": "npm run lint:fix && npm run ts-check && npm run test:coverage && npm run build",
     "release": "commit-and-tag-version"
   },
-  "keywords": [],
+  "keywords": [
+    "disposable",
+    "disposable-stack",
+    "scope",
+    "cleanup",
+    "resource-management",
+    "symbol-dispose"
+  ],
   "maintainers": [
     {
       "name": "CRIMX",

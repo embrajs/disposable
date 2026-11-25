@@ -10,6 +10,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const outdir = join(root, "dist");
 const entryPoints = {
   index: join(root, "src/index.ts"),
+  debug: join(root, "src/debug/index.ts"),
 };
 const { name: packageName } = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
 const cachePath = join(root, "mangle-cache.json");
@@ -57,7 +58,13 @@ await buildDts({
 
 const prodBundle = await readFile(join(outdir, "index.mjs"), "utf8");
 const devBundle = await readFile(join(outdir, "index.dev.mjs"), "utf8");
-assert(!/process\.env|__DEV__/.test(prodBundle), "Dev token leaked into index.mjs");
+const debugProdBundle = await readFile(join(outdir, "debug.mjs"), "utf8");
+const debugDevBundle = await readFile(join(outdir, "debug.dev.mjs"), "utf8");
+
+assert(!/process\.env|__DEV__|registerDevScope|captureStack/.test(prodBundle), "Dev diagnostics leaked into index.mjs");
 assert(!/process\.env|__DEV__/.test(devBundle), "Unresolved env token leaked into index.dev.mjs");
+assert(devBundle.includes("Originally"), "Dev diagnostics missing from index.dev.mjs");
+assert(debugProdBundle.includes('"@embra/disposable"'), "debug.mjs must externally import @embra/disposable");
+assert(debugDevBundle.includes('"@embra/disposable"'), "debug.dev.mjs must externally import @embra/disposable");
 
 await writeFile(cachePath, `${JSON.stringify(mangleCache, null, 2)}\n`);
