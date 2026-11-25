@@ -35,18 +35,27 @@ describe("utils", () => {
       expect(sym[Symbol.dispose]).toHaveBeenCalledTimes(1);
     });
 
-    it("prefers Symbol.dispose over dispose on objects, and invokes functions directly", () => {
+    it("prefers .dispose() over function invocation and Symbol.dispose", () => {
       const obj = {
         dispose: vi.fn(),
         [Symbol.dispose]: vi.fn(),
       };
       dispose(obj);
-      expect(obj[Symbol.dispose]).toHaveBeenCalledTimes(1);
-      expect(obj.dispose).not.toHaveBeenCalled();
+      expect(obj.dispose).toHaveBeenCalledTimes(1);
+      expect(obj[Symbol.dispose]).not.toHaveBeenCalled();
 
       const fn = vi.fn();
       dispose(fn);
       expect(fn).toHaveBeenCalledTimes(1);
+
+      const callableWithDispose = Object.assign(vi.fn(), { dispose: vi.fn() });
+      dispose(callableWithDispose);
+      expect(callableWithDispose.dispose).toHaveBeenCalledTimes(1);
+      expect(callableWithDispose).not.toHaveBeenCalled();
+
+      const symOnly = { [Symbol.dispose]: vi.fn() };
+      dispose(symOnly);
+      expect(symOnly[Symbol.dispose]).toHaveBeenCalledTimes(1);
     });
 
     it("is a no-op for null, undefined, and non-disposable objects", () => {

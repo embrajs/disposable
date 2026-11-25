@@ -29,12 +29,14 @@ export const isDisposable = (value: unknown): value is DisposableLike =>
  */
 export function dispose(value: unknown): void {
   if (value) {
-    if (isFn(value)) {
+    // Prefer `.dispose()` over `isFn` so callable resources with `.dispose()` aren't accidentally invoked,
+    // and `isFn` over `[Symbol.dispose]` so test mocks attaching `[Symbol.dispose]` (e.g. `vi.fn()`) still run.
+    if (isFn((value as IDisposable).dispose)) {
+      (value as IDisposable).dispose();
+    } else if (isFn(value)) {
       (value as Disposer)();
     } else if (isFn((value as Disposable)[SYM_DISPOSE])) {
       (value as Disposable)[SYM_DISPOSE]();
-    } else if (isFn((value as IDisposable).dispose)) {
-      (value as IDisposable).dispose();
     }
   }
 }
