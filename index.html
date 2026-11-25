@@ -186,8 +186,8 @@
 </code><button type="button">Copy</button></pre>
 
           <p>
-            <code>scope.dispose</code>
-            is pre-bound, so you can also return it directly from callbacks like React <code>useEffect</code>:
+            <code>scope.dispose</code> is pre-bound, so you can also return it directly from callbacks like React
+            <code>useEffect</code>:
           </p>
           <pre
           ><code class="ts"><span class="hl-0">useEffect</span><span class="hl-1">(() </span><span class="hl-6">=&gt;</span><span class="hl-1"> {</span><br/><span class="hl-1">  </span><span class="hl-6">const</span><span class="hl-1"> </span><span class="hl-9">s</span><span class="hl-1"> = </span><span class="hl-0">scope</span><span class="hl-1">();</span><br/><span class="hl-1">  </span><span class="hl-4">s</span><span class="hl-1">.</span><span class="hl-0">use</span><span class="hl-1">(</span><span class="hl-0">listen</span><span class="hl-1">(</span><span class="hl-4">window</span><span class="hl-1">, </span><span class="hl-2">&quot;resize&quot;</span><span class="hl-1">, </span><span class="hl-4">onResize</span><span class="hl-1">));</span><br/><span class="hl-1">  </span><span class="hl-4">s</span><span class="hl-1">.</span><span class="hl-0">adopt</span><span class="hl-1">(</span><span class="hl-0">setInterval</span><span class="hl-1">(</span><span class="hl-4">poll</span><span class="hl-1">, </span><span class="hl-8">5000</span><span class="hl-1">), </span><span class="hl-4">clearInterval</span><span class="hl-1">);</span><br/><span class="hl-1">  </span><span class="hl-3">return</span><span class="hl-1"> </span><span class="hl-4">s</span><span class="hl-1">.</span><span class="hl-4">dispose</span><span class="hl-1">;</span><br/><span class="hl-1">}, []);</span>
@@ -287,8 +287,7 @@
 </code><button type="button">Copy</button></pre>
 
           <h2 id="utilities-" class="tsd-anchor-link">
-            Utilities (<code>dispose</code>
-            / <code>isDisposable</code> / <code>detachable</code>)<a
+            Utilities (<code>dispose</code> / <code>isDisposable</code> / <code>detachable</code>)<a
               href="#utilities-"
               aria-label="Permalink"
               class="tsd-anchor-icon"
@@ -308,9 +307,8 @@
             >
           </h2>
           <p>
-            <code>@embra/disposable/debug</code>
-            emits structured snapshots, deterministic plain-text scope trees, and leak reports designed for test suites
-            and AI agent diagnostics, with zero production overhead:
+            <code>@embra/disposable/debug</code> emits structured snapshots, deterministic plain-text scope trees, and
+            leak reports designed for test suites and AI agent diagnostics, with zero production overhead:
           </p>
           <pre
           ><code class="ts"><span class="hl-3">import</span><span class="hl-1"> { </span><span class="hl-4">scope</span><span class="hl-1">, </span><span class="hl-4">scopeMap</span><span class="hl-1"> } </span><span class="hl-3">from</span><span class="hl-1"> </span><span class="hl-2">&quot;@embra/disposable&quot;</span><span class="hl-1">;</span><br/><span class="hl-3">import</span><span class="hl-1"> { </span><span class="hl-4">createLeakTracker</span><span class="hl-1">, </span><span class="hl-4">formatTree</span><span class="hl-1">, </span><span class="hl-4">inspect</span><span class="hl-1">, </span><span class="hl-4">trackLeaks</span><span class="hl-1"> } </span><span class="hl-3">from</span><span class="hl-1"> </span><span class="hl-2">&quot;@embra/disposable/debug&quot;</span><span class="hl-1">;</span><br/><br/><span class="hl-6">const</span><span class="hl-1"> </span><span class="hl-9">app</span><span class="hl-1"> = </span><span class="hl-0">scope</span><span class="hl-1">({ </span><span class="hl-4">name:</span><span class="hl-1"> </span><span class="hl-2">&quot;App&quot;</span><span class="hl-1"> });</span><br/><span class="hl-6">const</span><span class="hl-1"> </span><span class="hl-9">timers</span><span class="hl-1"> = </span><span class="hl-4">app</span><span class="hl-1">.</span><span class="hl-0">use</span><span class="hl-1">(</span><span class="hl-0">scopeMap</span><span class="hl-1">({ </span><span class="hl-4">name:</span><span class="hl-1"> </span><span class="hl-2">&quot;Timers&quot;</span><span class="hl-1"> }));</span><br/><span class="hl-4">timers</span><span class="hl-1">.</span><span class="hl-0">use</span><span class="hl-1">(</span><span class="hl-2">&quot;poll&quot;</span><span class="hl-1">, () </span><span class="hl-6">=&gt;</span><span class="hl-1"> {});</span><br/><br/><span class="hl-4">console</span><span class="hl-1">.</span><span class="hl-0">log</span><span class="hl-1">(</span><span class="hl-0">inspect</span><span class="hl-1">(</span><span class="hl-4">app</span><span class="hl-1">));</span><br/><span class="hl-4">console</span><span class="hl-1">.</span><span class="hl-0">log</span><span class="hl-1">(</span><span class="hl-0">formatTree</span><span class="hl-1">(</span><span class="hl-4">app</span><span class="hl-1">));</span><br/><span class="hl-5">// App (scope) [alive, size=1]</span><br/><span class="hl-5">// └── Timers (scopeMap) [alive, size=1]</span><br/><br/><span class="hl-5">// Detect undisposed scopes created during an action</span><br/><span class="hl-6">const</span><span class="hl-1"> </span><span class="hl-9">report</span><span class="hl-1"> = </span><span class="hl-0">trackLeaks</span><span class="hl-1">(() </span><span class="hl-6">=&gt;</span><span class="hl-1"> {</span><br/><span class="hl-1">  </span><span class="hl-6">const</span><span class="hl-1"> </span><span class="hl-9">leaked</span><span class="hl-1"> = </span><span class="hl-0">scope</span><span class="hl-1">({ </span><span class="hl-4">name:</span><span class="hl-1"> </span><span class="hl-2">&quot;Forgotten&quot;</span><span class="hl-1"> });</span><br/><span class="hl-1">  </span><span class="hl-3">return</span><span class="hl-1"> </span><span class="hl-4">leaked</span><span class="hl-1">;</span><br/><span class="hl-1">});</span><br/><span class="hl-4">console</span><span class="hl-1">.</span><span class="hl-0">log</span><span class="hl-1">(</span><span class="hl-4">report</span><span class="hl-1">.</span><span class="hl-4">text</span><span class="hl-1">);</span><br/><span class="hl-5">// Leaked 1 scope:</span><br/><span class="hl-5">// - Forgotten (scope) [alive, size=0]</span><br/><span class="hl-5">//     at ...</span><br/><br/><span class="hl-4">report</span><span class="hl-1">.</span><span class="hl-4">result</span><span class="hl-1">.</span><span class="hl-0">dispose</span><span class="hl-1">();</span><br/><span class="hl-4">app</span><span class="hl-1">.</span><span class="hl-0">dispose</span><span class="hl-1">();</span>
@@ -340,10 +338,9 @@
               single error is rethrown directly; multiple errors throw an <code>AggregateError</code>.
             </li>
             <li>
-              <strong>Explicit ownership</strong>: Keep scopes private (<code>#scope</code>
-              or a closure) and expose only <code>dispose</code> / <code>[Symbol.dispose]</code>.
-              <code>scope.dispose</code> is pre-bound and safe to pass directly to callbacks such as React
-              <code>useEffect</code>.
+              <strong>Explicit ownership</strong>: Keep scopes private (<code>#scope</code> or a closure) and expose
+              only <code>dispose</code> / <code>[Symbol.dispose]</code>. <code>scope.dispose</code> is pre-bound and
+              safe to pass directly to callbacks such as React <code>useEffect</code>.
             </li>
           </ul>
           <h2 id="documentation" class="tsd-anchor-link">
