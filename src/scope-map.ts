@@ -1,13 +1,12 @@
 import {
+  assertAlive,
   drainMap,
   flushMapKey,
   flushScope,
   type MapScopeState,
-  moveMap,
   removeMapEntry,
   ScopeBase,
   setMapEntry,
-  throwDisposed,
 } from "./core.ts";
 import type { DisposableLike, ScopeMap, ScopeOptions } from "./types.ts";
 import type { ScopeEntry } from "./utils.ts";
@@ -16,27 +15,21 @@ class ScopeMapImpl<K> extends ScopeBase implements ScopeMap<K>, MapScopeState<K>
   items_: Map<K, ScopeEntry> | null = null;
 
   constructor(options?: ScopeOptions) {
-    super(drainMap, options);
-  }
-
-  get [Symbol.toStringTag](): string {
-    return "ScopeMap";
+    super(drainMap, options, __DEV__ ? "scopeMap" : undefined);
   }
 
   get size(): number {
-    return this.items_ ? this.items_.size : 0;
+    return this.items_?.size ?? 0;
   }
 
   use<T extends DisposableLike | null | undefined>(key: K, value: T): T {
-    if (this.disposed_) {
-      throwDisposed(this);
-    }
+    assertAlive(this);
     if (value == null) {
       flushMapKey(this, key);
       return value;
     }
     const existing = this.items_?.get(key);
-    if (!existing || existing.f || !Object.is(existing.v, value)) {
+    if (!existing || existing.f || existing.v !== value) {
       if (existing) {
         flushMapKey(this, key);
       }
@@ -46,20 +39,10 @@ class ScopeMapImpl<K> extends ScopeBase implements ScopeMap<K>, MapScopeState<K>
   }
 
   adopt<T>(key: K, value: T, onDispose: (value: T) => void): T {
-    if (this.disposed_) {
-      throwDisposed(this);
-    }
+    assertAlive(this);
     flushMapKey(this, key);
     (this.items_ ??= new Map()).set(key, { v: value, f: onDispose });
     return value;
-  }
-
-  defer(key: K, onDispose: () => void): void {
-    if (this.disposed_) {
-      throwDisposed(this);
-    }
-    flushMapKey(this, key);
-    (this.items_ ??= new Map()).set(key, { v: onDispose });
   }
 
   get(key: K): unknown {
@@ -71,7 +54,7 @@ class ScopeMapImpl<K> extends ScopeBase implements ScopeMap<K>, MapScopeState<K>
   }
 
   keys(): IterableIterator<K> {
-    return this.items_ ? this.items_.keys() : ([].values() as IterableIterator<K>);
+    return ((this.items_ ?? [] as K[]) as unknown as Map<K, unknown>).keys();
   }
 
   remove(key: K): unknown {
@@ -86,10 +69,6 @@ class ScopeMapImpl<K> extends ScopeBase implements ScopeMap<K>, MapScopeState<K>
     } else {
       flushScope(this, drainMap);
     }
-  }
-
-  move(): ScopeMap<K> {
-    return moveMap(this, new ScopeMapImpl<K>());
   }
 }
 

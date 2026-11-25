@@ -1,6 +1,13 @@
-import { getDevDisposedMessage, linkDevChild, markDevDisposed, registerDevScope, unlinkDevChild } from "./dev.ts";
+import {
+  clearDevChildren,
+  getDevDisposedMessage,
+  linkDevValue,
+  markDevDisposed,
+  registerDevScope,
+  unlinkDevValue,
+} from "./dev.ts";
 import type { ScopeKind, ScopeOptions } from "./types.ts";
-import { disposeEntry, drainEntries, type ScopeEntry, SYM_DISPOSE, throwErrors } from "./utils.ts";
+import { disposeEntry, drainEntries, type ScopeEntry, SYM_DISPOSE, SYM_ON_DISPOSE, throwErrors } from "./utils.ts";
 
 /**
  * Minimal base class for all disposal scopes (shared public getters & `instanceof` identity).
@@ -10,48 +17,45 @@ import { disposeEntry, drainEntries, type ScopeEntry, SYM_DISPOSE, throwErrors }
 export interface ScopeBase extends Disposable {
   disposed_: boolean;
   ctrl_: AbortController | null;
-  parents_: Set<ScopeEntry> | null;
   readonly disposed: boolean;
   readonly signal: AbortSignal;
   dispose(this: void): void;
 }
 
 /** @internal */
-export const ScopeBase: new (drain: (s: any) => unknown[] | undefined, options?: ScopeOptions) => ScopeBase =
-  /* @__PURE__ */ (() => {
-    class Base implements ScopeBase {
-      disposed_ = false;
-      ctrl_: AbortController | null = null;
-      parents_: Set<ScopeEntry> | null = null;
-      readonly dispose: (this: void) => void;
+export const ScopeBase: new (
+  drain: (s: any) => unknown[] | undefined,
+  options?: ScopeOptions,
+  kind?: ScopeKind,
+) => ScopeBase = /* @__PURE__ */ (() => {
+  class Base implements ScopeBase {
+    disposed_ = false;
+    ctrl_: AbortController | null = null;
+    readonly dispose: (this: void) => void;
 
-      constructor(drain: (s: any) => unknown[] | undefined, options?: ScopeOptions) {
-        if (__DEV__) {
-          const tag = (this as unknown as Record<symbol, string>)[Symbol.toStringTag];
-          const kind = (tag[0].toLowerCase() + tag.slice(1)) as ScopeKind;
-          registerDevScope(this, kind, options?.name);
-        }
-        this.dispose = () => disposeScope(this, drain);
-      }
-
-      get disposed(): boolean {
-        return this.disposed_;
-      }
-
-      get signal(): AbortSignal {
-        return this.disposed_
-          ? this.ctrl_
-            ? this.ctrl_.signal
-            : AbortSignal.abort()
-          : (this.ctrl_ ??= new AbortController()).signal;
-      }
-
-      [SYM_DISPOSE](): void {
-        this.dispose();
+    constructor(drain: (s: any) => unknown[] | undefined, options?: ScopeOptions, kind?: ScopeKind) {
+      this.dispose = () => disposeScope(this, drain);
+      if (__DEV__) {
+        registerDevScope(this, kind as ScopeKind, options?.name);
       }
     }
-    return Base;
-  })();
+
+    get disposed(): boolean {
+      return this.disposed_;
+    }
+
+    get signal(): AbortSignal {
+      return this.disposed_
+        ? (this.ctrl_?.signal ?? AbortSignal.abort())
+        : (this.ctrl_ ??= new AbortController()).signal;
+    }
+
+    [SYM_DISPOSE](): void {
+      this.dispose();
+    }
+  }
+  return Base;
+})();
 
 /**
  * Shared state shape for Map-backed scopes (`ScopeSet` and `ScopeMap`).
@@ -62,61 +66,12 @@ export interface MapScopeState<K> extends ScopeBase {
 }
 
 /** @internal */
-export function detachFromParents(child: ScopeBase): void {
-  const parents = child.parents_;
-  if (parents) {
-    child.parents_ = null;
-    for (const entry of parents) {
-      const parent = entry.p as ScopeBase;
-      entry.p = null;
-      if (__DEV__) {
-        unlinkDevChild(parent, child);
-      }
-      (entry.r as (parent: any, entry: ScopeEntry) => void)(parent, entry);
-    }
-  }
-}
-
-/** @internal */
-export function attachChild(
-  parent: ScopeBase,
-  entry: ScopeEntry,
-  unlink: (parent: any, entry: ScopeEntry) => void,
-  key?: unknown,
-): void {
-  if (!entry.f && entry.v instanceof ScopeBase && !entry.v.disposed_) {
-    const child = entry.v;
-    entry.p = parent;
-    entry.r = unlink;
-    entry.k = key;
-    (child.parents_ ??= new Set()).add(entry);
-    if (__DEV__) {
-      linkDevChild(parent, child);
-    }
-  }
-}
-
-/** @internal */
-export function detachChild(entry: ScopeEntry): void {
-  const parent = entry.p as ScopeBase | null | undefined;
-  if (parent) {
-    entry.p = null;
-    const child = entry.v as ScopeBase;
-    child.parents_?.delete(entry);
-    if (__DEV__) {
-      unlinkDevChild(parent, child);
-    }
-  }
-}
-
-/** @internal */
 export function disposeScope<S extends ScopeBase>(s: S, drain: (s: S) => unknown[] | undefined): void {
   if (!s.disposed_) {
     s.disposed_ = true;
     if (__DEV__) {
-      markDevDisposed(s, "disposed");
+      markDevDisposed(s);
     }
-    detachFromParents(s);
     const errors = drain(s);
     s.ctrl_?.abort();
     throwErrors(errors);
@@ -131,30 +86,18 @@ export function flushScope<S extends ScopeBase>(s: S, drain: (s: S) => unknown[]
 }
 
 /** @internal */
-export function moveScope<T extends ScopeBase>(from: ScopeBase, to: T): T {
-  if (from.disposed_) {
-    throwDisposed(from);
+export function assertAlive(s: ScopeBase): void {
+  if (s.disposed_) {
+    let message = "disposed";
+    if (__DEV__) {
+      message = getDevDisposedMessage(s);
+    }
+    throw new ReferenceError(message);
   }
-  from.disposed_ = true;
-  if (__DEV__) {
-    markDevDisposed(from, "moved");
-  }
-  detachFromParents(from);
-  if (from.ctrl_) {
-    to.ctrl_ = from.ctrl_;
-    from.ctrl_ = null;
-  }
-  return to;
 }
 
 /** @internal */
-export function throwDisposed(s: ScopeBase): never {
-  let message = "disposed";
-  if (__DEV__) {
-    message = getDevDisposedMessage(s);
-  }
-  throw new ReferenceError(message);
-}
+export type OnDisposeHook = (cb: () => void) => (() => void) | false;
 
 /** @internal */
 export function removeMapEntry<K>(s: MapScopeState<K>, key: K): ScopeEntry | undefined {
@@ -163,7 +106,10 @@ export function removeMapEntry<K>(s: MapScopeState<K>, key: K): ScopeEntry | und
     const entry = items.get(key);
     if (entry) {
       items.delete(key);
-      detachChild(entry);
+      entry.u?.();
+      if (__DEV__) {
+        unlinkDevValue(s, entry);
+      }
       return entry;
     }
   }
@@ -177,42 +123,32 @@ export function flushMapKey<K>(s: MapScopeState<K>, key: K): void {
   }
 }
 
-const unlinkMap = (s: MapScopeState<unknown>, entry: ScopeEntry): void => {
-  (s.items_ as Map<unknown, ScopeEntry>).delete(entry.k);
-};
-
 /** @internal */
 export function setMapEntry<K>(s: MapScopeState<K>, key: K, entry: ScopeEntry): void {
+  const hook = (entry.v as { dispose?: Record<symbol, OnDisposeHook> }).dispose?.[SYM_ON_DISPOSE];
+  if (hook) {
+    const unsub = hook(() => {
+      if (s.items_?.get(key) === entry) {
+        s.items_.delete(key);
+      }
+    });
+    if (!unsub) return;
+    entry.u = unsub;
+  }
   (s.items_ ??= new Map()).set(key, entry);
-  attachChild(s, entry, unlinkMap, key);
+  if (__DEV__) {
+    linkDevValue(s, entry.v);
+  }
 }
 
 /** @internal */
 export function drainMap<K>(s: MapScopeState<K>): unknown[] | undefined {
   const items = s.items_;
   s.items_ = null;
-  if (items && items.size > 0) {
-    const entries = new Array<ScopeEntry>(items.size);
-    let i = 0;
-    for (const entry of items.values()) {
-      detachChild(entry);
-      entries[i++] = entry;
-    }
-    return drainEntries(entries);
-  }
-}
-
-/** @internal */
-export function moveMap<K, T extends MapScopeState<K>>(from: MapScopeState<K>, to: T): T {
-  moveScope(from, to);
-  const items = from.items_;
   if (items) {
-    from.items_ = null;
-    to.items_ = items;
-    for (const [key, entry] of items) {
-      detachChild(entry);
-      attachChild(to, entry, unlinkMap, key);
+    if (__DEV__) {
+      clearDevChildren(s);
     }
+    return drainEntries(items.values());
   }
-  return to;
 }

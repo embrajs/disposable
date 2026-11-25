@@ -8,6 +8,12 @@ export const SYM_DISPOSE: typeof Symbol.dispose =
   Symbol.dispose ?? /* @__PURE__ */ (Symbol.for("Symbol.dispose") as typeof Symbol.dispose);
 /* v8 ignore stop */
 
+/**
+ * Shared protocol symbol for subscribing to early disposal notifications.
+ * @internal
+ */
+export const SYM_ON_DISPOSE: symbol = /* @__PURE__ */ Symbol.for("@embra/detach");
+
 /** @internal */
 export const isFn = (v: unknown): v is (...args: any[]) => any => typeof v === "function";
 
@@ -42,12 +48,8 @@ export interface ScopeEntry {
   v: unknown;
   /** Optional custom cleanup callback from `adopt()`. */
   f?: (value: any) => void;
-  /** Parent scope when this entry holds a live child scope. */
-  p?: unknown;
-  /** Static unlink callback for removing this entry from its parent on child disposal. */
-  r?: (parent: any, entry: ScopeEntry) => void;
-  /** Map key when stored in a Map-backed scope. */
-  k?: unknown;
+  /** Optional unsubscribe callback for `detachable` / `SYM_ON_DISPOSE` hooks. */
+  u?: () => void;
 }
 
 /**
@@ -57,14 +59,14 @@ export interface ScopeEntry {
 export const disposeEntry = (entry: ScopeEntry): void => (entry.f ? entry.f(entry.v) : dispose(entry.v));
 
 /**
- * Run an array of entries in LIFO order, collecting any thrown errors.
+ * Run an iterable of entries in iteration order, collecting any thrown errors.
  * @internal
  */
-export function drainEntries(entries: ScopeEntry[]): unknown[] | undefined {
+export function drainEntries(entries: Iterable<ScopeEntry>): unknown[] | undefined {
   let errors: unknown[] | undefined;
-  for (let i = entries.length - 1; i >= 0; i--) {
+  for (const entry of entries) {
     try {
-      disposeEntry(entries[i]);
+      disposeEntry(entry);
     } catch (err) {
       (errors ??= []).push(err);
     }

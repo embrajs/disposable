@@ -5,7 +5,6 @@ describe("scopeMap", () => {
   it("replaces and flushes previous resource on same key", () => {
     const order: string[] = [];
     const sm = scopeMap<string>({ name: "timers" });
-    expect(Object.prototype.toString.call(sm)).toBe("[object ScopeMap]");
     expect(sm.size).toBe(0);
     expect(sm.signal.aborted).toBe(false);
     expect([...sm.keys()]).toEqual([]);
@@ -29,24 +28,23 @@ describe("scopeMap", () => {
     expect(order).toEqual(["d1", "d2"]);
     expect(sm.has("a")).toBe(false);
 
-    // adopt & defer
+    // adopt
     const val = sm.adopt("b", 100, (n) => order.push(`adopt:${n}`));
     expect(val).toBe(100);
-    sm.defer("c", () => order.push("defer:c"));
-    expect([...sm.keys()]).toEqual(["b", "c"]);
-    expect(sm.size).toBe(2);
+    expect([...sm.keys()]).toEqual(["b"]);
+    expect(sm.size).toBe(1);
 
     sm.dispose();
     expect(sm.disposed).toBe(true);
     expect(sm.signal.aborted).toBe(true);
     expect(sm.size).toBe(0);
-    expect(order).toEqual(["d1", "d2", "defer:c", "adopt:100"]);
+    expect(order).toEqual(["d1", "d2", "adopt:100"]);
 
     {
       using m = scopeMap<string>();
-      m.defer("u", () => order.push("using"));
+      m.use("u", () => order.push("using"));
     }
-    expect(order).toEqual(["d1", "d2", "defer:c", "adopt:100", "using"]);
+    expect(order).toEqual(["d1", "d2", "adopt:100", "using"]);
   });
 
   it("supports remove(), targeted flush(key), and flush()", () => {
@@ -107,36 +105,24 @@ describe("scopeMap", () => {
     expect(sm.size).toBe(0);
   });
 
-  it("auto-detaches child scopes and supports move()", () => {
-    const sm1 = scopeMap<string>();
-    const child = sm1.use("c", scope());
+  it("cascades to child scopes and disposes overwritten keys", () => {
+    const sm = scopeMap<string>();
+    const child = sm.use("c", scope());
     const fn = vi.fn();
-    sm1.use("f", fn);
-
-    const sm2 = sm1.move();
-    expect(sm1.disposed).toBe(true);
-    expect(sm2.size).toBe(2);
+    sm.use("f", fn);
 
     child.dispose();
-    expect(sm2.has("c")).toBe(false);
-    expect(sm2.size).toBe(1);
+    expect(child.disposed).toBe(true);
 
-    // Guard against stale child detach when key was overwritten
-    const c1 = sm2.use("x", scope());
-    const c2 = sm2.use("x", scope());
+    // Overwriting key disposes previous child
+    const c1 = sm.use("x", scope());
+    const c2 = sm.use("x", scope());
     expect(c1.disposed).toBe(true);
-    expect(sm2.get("x")).toBe(c2);
+    expect(sm.get("x")).toBe(c2);
 
-    sm2.dispose();
+    sm.dispose();
     expect(fn).toHaveBeenCalledTimes(1);
     expect(c2.disposed).toBe(true);
-
-    // move empty
-    const empty1 = scopeMap();
-    const empty2 = empty1.move();
-    expect(empty1.disposed).toBe(true);
-    expect(empty2.size).toBe(0);
-    empty2.dispose();
   });
 
   it("throws ReferenceError after dispose", () => {
@@ -152,9 +138,5 @@ describe("scopeMap", () => {
     const clean = vi.fn();
     expect(() => sm.adopt("a", 1, clean)).toThrow(ReferenceError);
     expect(clean).not.toHaveBeenCalled();
-
-    const def = vi.fn();
-    expect(() => sm.defer("a", def)).toThrow(ReferenceError);
-    expect(def).not.toHaveBeenCalled();
   });
 });

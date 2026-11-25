@@ -11,7 +11,7 @@ Explicit disposal scopes for predictable resource cleanup, built for AI agents.
 
 - **Works with any cleanup style**: Manage cleanup functions (`() => void`), `{ dispose() }`, TC39 `Disposable` (`using`), and raw resources (`adopt()`) through one API.
 - **Scope primitives for every pattern**: Ordered stacks (`scope`), deduplicated sets (`scopeSet`), keyed maps that dispose replaced entries (`scopeMap`), and single replaceable slots (`scopeOne`).
-- **Composable lifecycles**: Nest child scopes with automatic early-dispose detachment, and pass `scope.signal` directly to `AbortSignal`-aware APIs.
+- **Composable lifecycles**: Nest child scopes (including encapsulated classes exposing `.dispose`) with cascading disposal, and pass `scope.signal` directly to `AbortSignal`-aware APIs.
 - **AI-agent observability**: `@embra/disposable/debug` provides snapshots (`inspect`), deterministic plain-text scope trees (`formatTree`), and leak detection (`trackLeaks` / `createLeakTracker`), with zero production overhead.
 - **Small & tree-shakeable**: Compact pure ESM where each scope tree-shakes independently.
 
@@ -89,7 +89,7 @@ useEffect(() => {
 
 ## Core Primitives
 
-All four scopes accept cleanup functions `() => void`, `{ dispose(): void }`, and `{ [Symbol.dispose](): void }`, and expose `disposed`, `size`, `signal`, pre-bound `dispose`, `[Symbol.dispose]`, `flush()`, and `move()`.
+All four scopes accept cleanup functions `() => void`, `{ dispose(): void }`, and `{ [Symbol.dispose](): void }`, and expose `disposed`, `size`, `signal`, pre-bound `dispose`, `[Symbol.dispose]`, and `flush()`.
 
 ### `scope(items?, options?)`
 
@@ -101,7 +101,7 @@ import { scope } from "@embra/disposable";
 const s = scope([listen(window, "resize", onResize), listen(window, "scroll", onScroll)]);
 
 const ws = s.adopt(new WebSocket("wss://example.com"), (w) => w.close());
-s.defer(() => console.log("cleaned up", ws.url));
+s.use(() => console.log("cleaned up", ws.url));
 
 s.dispose();
 ```
@@ -168,7 +168,7 @@ activeRoom.dispose(); // closes "random"
 
 ## Nested Scopes & `AbortSignal`
 
-Nesting a child scope with `parent.use(child)` links their lifecycles: disposing the parent cleans up all children, while disposing a child early automatically detaches it from the parent. Every scope also exposes a `signal` that aborts on `dispose()`:
+Nesting a child scope (or any object/class exposing `.dispose`) with `parent.use(child)` cascades disposal from parent to children. Every scope also exposes a lazy `signal` that aborts on `dispose()`. For dynamic collections where individual items are added and removed over time, use `scopeSet`, `scopeMap`, or `scopeOne`:
 
 ```ts
 import { scope } from "@embra/disposable";
@@ -178,43 +178,47 @@ const request = app.use(scope({ name: "FetchUser" }));
 
 fetch("/api/user", { signal: request.signal });
 
-// Disposing the child early aborts the fetch and detaches it from `app`
-request.dispose();
-app.size; // 0
+// Disposing the parent aborts and disposes all nested children
+app.dispose();
+request.disposed; // true
+request.signal.aborted; // true
 ```
 
-## TC39 `using` & Ownership Transfer
+## TC39 `using`
 
-All scopes implement `[Symbol.dispose]` (and `scope` is compatible with TC39 `DisposableStack`), so they work with `using` blocks. In factories or constructors, combine `using` with `move()` to clean up partial resources if initialization throws and transfer ownership on success:
+All scopes implement `[Symbol.dispose]`, so they work directly with `using` blocks:
 
 ```ts
 import { scope } from "@embra/disposable";
 
-function createClient(url: string) {
-  using init = scope({ name: "client" });
-
-  const ws = init.adopt(new WebSocket(url), (w) => w.close());
-  // If authentication throws, `ws` is closed automatically when leaving the block
-  init.use(authenticate(ws));
-
-  // Transfer ownership (including any active `signal`); `init` becomes disposed so `using` is a no-op
-  const owned = init.move();
-  return {
-    ws,
-    dispose: owned.dispose,
-    [Symbol.dispose]: owned.dispose,
-  };
-}
+{
+  using s = scope({ name: "request" });
+  const ws = s.adopt(new WebSocket("wss://example.com"), (w) => w.close());
+  s.use(() => console.log("closed", ws.url));
+} // `s` is automatically disposed when leaving the block
 ```
 
-## Utilities (`dispose` / `isDisposable`)
+## Utilities (`dispose` / `isDisposable` / `detachable`)
 
 ```ts
-import { dispose, isDisposable } from "@embra/disposable";
+import { detachable, dispose, isDisposable, scope } from "@embra/disposable";
 
 if (isDisposable(resource)) {
   dispose(resource);
 }
+
+// Wrap a cleanup function so calling it early automatically detaches it from containing scopes
+function timeout(ms: number, fn: () => void) {
+  const stop = detachable(() => clearTimeout(id));
+  const id = setTimeout(() => {
+    stop();
+    fn();
+  }, ms);
+  return stop;
+}
+
+const s = scope();
+s.use(timeout(1000, () => console.log("done")));
 ```
 
 ## Debugging (`@embra/disposable/debug`)
@@ -227,7 +231,7 @@ import { createLeakTracker, formatTree, inspect, trackLeaks } from "@embra/dispo
 
 const app = scope({ name: "App" });
 const timers = app.use(scopeMap({ name: "Timers" }));
-timers.defer("poll", () => {});
+timers.use("poll", () => {});
 
 console.log(inspect(app));
 console.log(formatTree(app));
@@ -252,8 +256,8 @@ For async workflows or `beforeEach` / `afterEach` hooks, use `createLeakTracker(
 
 ## Design Contracts
 
-- **One-shot `dispose()` vs. `flush()`**: `dispose()` is irreversible and idempotent. Calling `use`, `adopt`, `defer`, or `move` after disposal throws `ReferenceError` (with the original disposal stack trace in development builds). Use `flush()` to clear entries while keeping the scope active.
-- **LIFO order & error propagation**: Remaining resources still dispose if one throws. A single error is rethrown directly; multiple errors throw an `AggregateError`.
+- **One-shot `dispose()` vs. `flush()`**: `dispose()` is irreversible and idempotent. Calling `use` or `adopt` after disposal throws `ReferenceError` (with the original disposal stack trace in development builds). Use `flush()` to clear entries while keeping the scope active.
+- **Disposal order & error propagation**: `scope` disposes in LIFO order (`scopeSet` and `scopeMap` dispose in insertion order). Remaining resources still dispose if one throws. A single error is rethrown directly; multiple errors throw an `AggregateError`.
 - **Explicit ownership**: Keep scopes private (`#scope` or a closure) and expose only `dispose` / `[Symbol.dispose]`. `scope.dispose` is pre-bound and safe to pass directly to callbacks such as React `useEffect`.
 
 ## Documentation

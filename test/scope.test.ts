@@ -3,11 +3,10 @@ import { scope } from "../src/index.ts";
 import { setDevMode } from "./setup.ts";
 
 describe("scope", () => {
-  it("disposes resources in LIFO order via use, adopt, and defer", () => {
+  it("disposes resources in LIFO order via use and adopt", () => {
     const order: string[] = [];
     const s = scope();
 
-    expect(Object.prototype.toString.call(s)).toBe("[object Scope]");
     expect(s.disposed).toBe(false);
     expect(s.size).toBe(0);
 
@@ -15,28 +14,27 @@ describe("scope", () => {
     const idisp = s.use({ dispose: () => order.push("idisp") });
     const sym = s.use({ [Symbol.dispose]: () => order.push("sym") });
     const adopted = s.adopt({ id: 42 }, (v) => order.push(`adopt:${v.id}`));
-    s.defer(() => order.push("defer"));
 
     expect(typeof fn).toBe("function");
     expect(idisp).toBeDefined();
     expect(sym).toBeDefined();
     expect(adopted).toEqual({ id: 42 });
-    expect(s.size).toBe(5);
+    expect(s.size).toBe(4);
 
     // null / undefined are no-ops
     expect(s.use(null)).toBeNull();
     expect(s.use(undefined)).toBeUndefined();
-    expect(s.size).toBe(5);
+    expect(s.size).toBe(4);
 
     s.dispose();
 
     expect(s.disposed).toBe(true);
     expect(s.size).toBe(0);
-    expect(order).toEqual(["defer", "adopt:42", "sym", "idisp", "fn"]);
+    expect(order).toEqual(["adopt:42", "sym", "idisp", "fn"]);
 
     // idempotent dispose
     s.dispose();
-    expect(order).toEqual(["defer", "adopt:42", "sym", "idisp", "fn"]);
+    expect(order).toEqual(["adopt:42", "sym", "idisp", "fn"]);
   });
 
   it("accepts initial items and options", () => {
@@ -53,14 +51,14 @@ describe("scope", () => {
     const fn = vi.fn();
     {
       using s = scope();
-      s.defer(fn);
+      s.use(fn);
       expect(fn).not.toHaveBeenCalled();
     }
     expect(fn).toHaveBeenCalledTimes(1);
 
     const fn2 = vi.fn();
     const s2 = scope();
-    s2.defer(fn2);
+    s2.use(fn2);
     const detached = s2.dispose;
     detached();
     expect(fn2).toHaveBeenCalledTimes(1);
@@ -71,15 +69,15 @@ describe("scope", () => {
     const order: string[] = [];
     const s = scope();
     s.flush(); // empty flush
-    s.defer(() => order.push("a"));
-    s.defer(() => order.push("b"));
+    s.use(() => order.push("a"));
+    s.use(() => order.push("b"));
     s.flush();
 
     expect(s.disposed).toBe(false);
     expect(s.size).toBe(0);
     expect(order).toEqual(["b", "a"]);
 
-    s.defer(() => order.push("c"));
+    s.use(() => order.push("c"));
     s.dispose();
     expect(order).toEqual(["b", "a", "c"]);
 
@@ -90,7 +88,7 @@ describe("scope", () => {
   it("prevents re-entrant disposal loops", () => {
     const s = scope();
     let count = 0;
-    s.defer(() => {
+    s.use(() => {
       count++;
       s.dispose();
     });
@@ -101,20 +99,20 @@ describe("scope", () => {
   it("collects errors and disposes remaining resources", () => {
     const order: string[] = [];
     const s1 = scope();
-    s1.defer(() => order.push("first"));
-    s1.defer(() => {
+    s1.use(() => order.push("first"));
+    s1.use(() => {
       throw new Error("single");
     });
-    s1.defer(() => order.push("last"));
+    s1.use(() => order.push("last"));
 
     expect(() => s1.dispose()).toThrow("single");
     expect(order).toEqual(["last", "first"]);
 
     const s2 = scope();
-    s2.defer(() => {
+    s2.use(() => {
       throw new Error("e1");
     });
-    s2.defer(() => {
+    s2.use(() => {
       throw new Error("e2");
     });
 
@@ -125,40 +123,6 @@ describe("scope", () => {
       expect(err).toBeInstanceOf(AggregateError);
       expect((err as AggregateError).errors).toHaveLength(2);
     }
-  });
-
-  it("transfers ownership with move() including active AbortSignal and child scopes", () => {
-    const order: string[] = [];
-    const s1 = scope({ name: "init" });
-    const sig = s1.signal;
-    const child = s1.use(scope());
-    child.defer(() => order.push("child"));
-    s1.defer(() => order.push("parent"));
-
-    const s2 = s1.move();
-    expect(s1.disposed).toBe(true);
-    expect(s1.size).toBe(0);
-    expect(sig.aborted).toBe(false);
-    expect(s1.signal.aborted).toBe(true);
-    expect(s2.disposed).toBe(false);
-    expect(s2.size).toBe(2);
-    expect(s2.signal).toBe(sig);
-
-    // Moving an empty scope also works
-    const empty1 = scope();
-    const empty2 = empty1.move();
-    expect(empty1.disposed).toBe(true);
-    expect(empty2.size).toBe(0);
-    empty2.dispose();
-
-    // Child early dispose detaches from s2 (not s1)
-    child.dispose();
-    expect(s2.size).toBe(1);
-    expect(order).toEqual(["child"]);
-
-    s2.dispose();
-    expect(sig.aborted).toBe(true);
-    expect(order).toEqual(["child", "parent"]);
   });
 
   it("supports lazy AbortSignal that aborts on dispose", () => {
@@ -177,7 +141,7 @@ describe("scope", () => {
     expect(s2.signal.aborted).toBe(true);
   });
 
-  it("auto-detaches child scopes on early disposal", () => {
+  it("cascades disposal to nested child scopes", () => {
     const parent = scope();
     const child = parent.use(scope());
     const alreadyDead = scope();
@@ -185,10 +149,8 @@ describe("scope", () => {
     parent.use(alreadyDead);
 
     expect(parent.size).toBe(2);
-    child.dispose();
-    expect(parent.size).toBe(1);
-
     parent.dispose();
+    expect(child.disposed).toBe(true);
     expect(parent.size).toBe(0);
   });
 
@@ -205,38 +167,29 @@ describe("scope", () => {
     const adoptCleanup = vi.fn();
     expect(() => s.adopt(123, adoptCleanup)).toThrow(ReferenceError);
     expect(adoptCleanup).not.toHaveBeenCalled();
-
-    const deferred = vi.fn();
-    expect(() => s.defer(deferred)).toThrow(ReferenceError);
-    expect(deferred).not.toHaveBeenCalled();
-
-    expect(() => s.move()).toThrow(ReferenceError);
   });
 
   it("includes disposal stack in dev mode and omits it in prod mode", () => {
     const s = scope({ name: "dev-scope" });
     s.dispose();
-    expect(() => s.defer(() => {})).toThrow(/Originally disposed at:/);
-
-    const moved = scope();
-    const target = moved.move();
-    expect(() => moved.defer(() => {})).toThrow(/Originally moved at:/);
-    target.dispose();
+    expect(() => s.use(() => {})).toThrow(/Originally disposed at:/);
 
     setDevMode(false);
     const prod = scope({ name: "prod-scope" });
     const prodChild = prod.use(scope());
     const prodChild2 = prod.use(scope());
     prodChild.dispose();
-    const prodMoved = prod.move();
-    prodMoved.dispose();
+    prod.dispose();
     expect(prodChild2.disposed).toBe(true);
-    expect(() => prod.defer(() => {})).toThrow("disposed");
+    expect(() => prod.use(() => {})).toThrow("disposed");
 
-    // Scope created in prod mode, then disposed & accessed in dev mode (no dev meta)
+    // Scope created in prod mode, then drained/accessed in dev mode (no dev meta)
+    setDevMode(false);
     const prodNoMeta = scope();
+    prodNoMeta.use(scope());
     setDevMode(true);
+    prodNoMeta.use(scope());
     prodNoMeta.dispose();
-    expect(() => prodNoMeta.defer(() => {})).toThrow("disposed");
+    expect(() => prodNoMeta.use(() => {})).toThrow("disposed");
   });
 });

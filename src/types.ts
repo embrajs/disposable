@@ -4,6 +4,15 @@
 export type Disposer = () => void;
 
 /**
+ * A callable, idempotent disposer that automatically detaches itself from any containing scopes
+ * when invoked early. Implements {@link Disposer}, {@link IDisposable}, and TC39 `Disposable`.
+ */
+export interface DetachableDisposer extends IDisposable, Disposable {
+  (this: void): void;
+  dispose(this: void): void;
+}
+
+/**
  * An object with a `dispose()` method.
  */
 export interface IDisposable {
@@ -51,7 +60,7 @@ export interface BaseScope extends Disposable {
   readonly signal: AbortSignal;
 
   /**
-   * Dispose all managed resources in LIFO order and permanently close this scope.
+   * Dispose all managed resources and permanently close this scope.
    * Safe to pass detached (does not depend on `this`).
    */
   dispose(this: void): void;
@@ -68,9 +77,9 @@ export interface BaseScope extends Disposable {
 }
 
 /**
- * An ordered (LIFO) disposal scope aligned with TC39 `DisposableStack`.
+ * An ordered (LIFO) disposal scope.
  */
-export interface Scope extends BaseScope, DisposableStack {
+export interface Scope extends BaseScope {
   /**
    * Register a disposable resource (or `null` / `undefined` as a no-op) and return it.
    */
@@ -80,17 +89,6 @@ export interface Scope extends BaseScope, DisposableStack {
    * Register a non-disposable value with an explicit cleanup callback and return the value.
    */
   adopt<T>(value: T, onDispose: (value: T) => void): T;
-
-  /**
-   * Register a cleanup callback to run when this scope is disposed or flushed.
-   */
-  defer(onDispose: () => void): void;
-
-  /**
-   * Transfer all managed resources (and any active `AbortSignal`) into a new `Scope`,
-   * marking this scope as disposed.
-   */
-  move(): Scope;
 }
 
 /**
@@ -98,7 +96,7 @@ export interface Scope extends BaseScope, DisposableStack {
  */
 export interface ScopeSet extends Scope {
   /**
-   * Check whether a resource or deferred callback is currently managed by this scope.
+   * Check whether a resource is currently managed by this scope.
    */
   has(value: unknown): boolean;
 
@@ -116,12 +114,6 @@ export interface ScopeSet extends Scope {
    * Dispose and remove a specific resource.
    */
   flush(value: unknown): void;
-
-  /**
-   * Transfer all managed resources (and any active `AbortSignal`) into a new `ScopeSet`,
-   * marking this scope as disposed.
-   */
-  move(): ScopeSet;
 }
 
 /**
@@ -139,11 +131,6 @@ export interface ScopeMap<K = unknown> extends BaseScope {
    * (disposing any previous entry at `key`) and return the value.
    */
   adopt<T>(key: K, value: T, onDispose: (value: T) => void): T;
-
-  /**
-   * Register a cleanup callback under `key` (disposing any previous entry at `key`).
-   */
-  defer(key: K, onDispose: () => void): void;
 
   /**
    * Get the resource currently stored under `key`, if any.
@@ -174,12 +161,6 @@ export interface ScopeMap<K = unknown> extends BaseScope {
    * Dispose and remove the resource at `key`.
    */
   flush(key: K): void;
-
-  /**
-   * Transfer all managed resources (and any active `AbortSignal`) into a new `ScopeMap`,
-   * marking this scope as disposed.
-   */
-  move(): ScopeMap<K>;
 }
 
 /**
@@ -209,11 +190,6 @@ export interface ScopeOne<T = unknown> extends BaseScope {
   adopt<V extends T>(value: V, onDispose: (value: V) => void): V;
 
   /**
-   * Replace the current slot with a cleanup callback (disposing the previous one first).
-   */
-  defer(onDispose: () => void): void;
-
-  /**
    * Check whether `value` is the currently held resource (using `Object.is`).
    */
   is(value: unknown): boolean;
@@ -223,10 +199,4 @@ export interface ScopeOne<T = unknown> extends BaseScope {
    * @returns The removed resource, or `undefined` if the slot was empty.
    */
   remove(): T | undefined;
-
-  /**
-   * Transfer the current resource (and any active `AbortSignal`) into a new `ScopeOne`,
-   * marking this scope as disposed.
-   */
-  move(): ScopeOne<T>;
 }

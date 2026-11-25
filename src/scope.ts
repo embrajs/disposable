@@ -1,20 +1,16 @@
-import { attachChild, detachChild, flushScope, moveScope, ScopeBase, throwDisposed } from "./core.ts";
+import { assertAlive, flushScope, type OnDisposeHook, ScopeBase } from "./core.ts";
+import { clearDevChildren, linkDevValue } from "./dev.ts";
 import type { DisposableLike, Scope, ScopeOptions } from "./types.ts";
-import { createIterableScope, drainEntries, type ScopeEntry } from "./utils.ts";
-
-function unlinkArray(s: ScopeImpl, entry: ScopeEntry): void {
-  const items = s.items_ as ScopeEntry[];
-  items.splice(items.lastIndexOf(entry), 1);
-}
+import { createIterableScope, drainEntries, type ScopeEntry, SYM_ON_DISPOSE } from "./utils.ts";
 
 function drainArray(s: ScopeImpl): unknown[] | undefined {
   const items = s.items_;
   s.items_ = null;
-  if (items && items.length > 0) {
-    for (let i = 0; i < items.length; i++) {
-      detachChild(items[i]);
+  if (items) {
+    if (__DEV__) {
+      clearDevChildren(s);
     }
-    return drainEntries(items);
+    return drainEntries(items.reverse());
   }
 }
 
@@ -22,67 +18,49 @@ class ScopeImpl extends ScopeBase implements Scope {
   items_: ScopeEntry[] | null = null;
 
   constructor(options?: ScopeOptions) {
-    super(drainArray, options);
-  }
-
-  get [Symbol.toStringTag](): string {
-    return "Scope";
+    super(drainArray, options, __DEV__ ? "scope" : undefined);
   }
 
   get size(): number {
-    return this.items_ ? this.items_.length : 0;
+    return this.items_?.length ?? 0;
   }
 
   use<T extends DisposableLike | null | undefined>(value: T): T {
-    if (this.disposed_) {
-      throwDisposed(this);
-    }
+    assertAlive(this);
     if (value != null) {
       const entry: ScopeEntry = { v: value };
+      const hook = (value as { dispose?: Record<symbol, OnDisposeHook> }).dispose?.[SYM_ON_DISPOSE];
+      if (
+        hook &&
+        !hook(() => {
+          if (this.items_) {
+            this.items_.splice(this.items_.lastIndexOf(entry), 1);
+          }
+        })
+      ) {
+        return value;
+      }
       (this.items_ ??= []).push(entry);
-      attachChild(this, entry, unlinkArray);
+      if (__DEV__) {
+        linkDevValue(this, value);
+      }
     }
     return value;
   }
 
   adopt<T>(value: T, onDispose: (value: T) => void): T {
-    if (this.disposed_) {
-      throwDisposed(this);
-    }
+    assertAlive(this);
     (this.items_ ??= []).push({ v: value, f: onDispose });
     return value;
-  }
-
-  defer(onDispose: () => void): void {
-    if (this.disposed_) {
-      throwDisposed(this);
-    }
-    (this.items_ ??= []).push({ v: onDispose });
   }
 
   flush(): void {
     flushScope(this, drainArray);
   }
-
-  move(): Scope {
-    const next = new ScopeImpl();
-    moveScope(this, next);
-    const items = this.items_;
-    if (items) {
-      this.items_ = null;
-      next.items_ = items;
-      for (let i = 0; i < items.length; i++) {
-        const entry = items[i];
-        detachChild(entry);
-        attachChild(next, entry, unlinkArray);
-      }
-    }
-    return next;
-  }
 }
 
 /**
- * Create an ordered (LIFO) disposal scope aligned with TC39 `DisposableStack`.
+ * Create an ordered (LIFO) disposal scope.
  */
 export function scope(options?: ScopeOptions): Scope;
 export function scope(items: Iterable<DisposableLike | null | undefined>, options?: ScopeOptions): Scope;

@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { scope, scopeOne } from "../src/index.ts";
+import { scopeOne } from "../src/index.ts";
 
 describe("scopeOne", () => {
-  it("manages a single refreshable slot across use, adopt, and defer", () => {
+  it("manages a single refreshable slot across use and adopt", () => {
     const order: string[] = [];
     const so = scopeOne({ name: "slot" });
-    expect(Object.prototype.toString.call(so)).toBe("[object ScopeOne]");
     expect(so.size).toBe(0);
     expect(so.signal.aborted).toBe(false);
     expect(so.current).toBeUndefined();
@@ -42,21 +41,21 @@ describe("scopeOne", () => {
     expect(so.adopt(1, (n) => order.push(`adopt:${n}`))).toBe(1);
     expect(order).toEqual(["d1", "d2", "adopt:0"]);
 
-    // defer replaces adopted value
-    so.defer(() => order.push("defer"));
+    // use replaces adopted value
+    so.use(() => order.push("replaced"));
     expect(order).toEqual(["d1", "d2", "adopt:0", "adopt:1"]);
 
     so.dispose();
     expect(so.disposed).toBe(true);
     expect(so.signal.aborted).toBe(true);
     expect(so.size).toBe(0);
-    expect(order).toEqual(["d1", "d2", "adopt:0", "adopt:1", "defer"]);
+    expect(order).toEqual(["d1", "d2", "adopt:0", "adopt:1", "replaced"]);
 
     {
       using o = scopeOne();
-      o.defer(() => order.push("using"));
+      o.use(() => order.push("using"));
     }
-    expect(order).toEqual(["d1", "d2", "adopt:0", "adopt:1", "defer", "using"]);
+    expect(order).toEqual(["d1", "d2", "adopt:0", "adopt:1", "replaced", "using"]);
 
     // dispose when empty
     const empty = scopeOne();
@@ -73,7 +72,7 @@ describe("scopeOne", () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it("supports remove(), flush(), error propagation, and move()", () => {
+  it("supports remove(), flush(), and error propagation", () => {
     const so = scopeOne();
     expect(so.remove()).toBeUndefined();
 
@@ -85,7 +84,7 @@ describe("scopeOne", () => {
 
     // Error propagation on dispose
     const errScope = scopeOne();
-    errScope.defer(() => {
+    errScope.use(() => {
       throw new Error("one-fail");
     });
     expect(() => errScope.dispose()).toThrow("one-fail");
@@ -93,24 +92,6 @@ describe("scopeOne", () => {
 
     // flush after dispose is no-op
     errScope.flush();
-
-    // move with child scope + auto-detach
-    const s1 = scopeOne();
-    const child = s1.use(scope());
-    const s2 = s1.move();
-    expect(s1.disposed).toBe(true);
-    expect(s2.current).toBe(child);
-
-    child.dispose();
-    expect(s2.size).toBe(0);
-    s2.dispose();
-
-    // move empty
-    const e1 = scopeOne();
-    const e2 = e1.move();
-    expect(e1.disposed).toBe(true);
-    expect(e2.size).toBe(0);
-    e2.dispose();
   });
 
   it("throws ReferenceError after dispose", () => {
@@ -126,9 +107,5 @@ describe("scopeOne", () => {
     const clean = vi.fn();
     expect(() => so.adopt("v", clean)).toThrow(ReferenceError);
     expect(clean).not.toHaveBeenCalled();
-
-    const def = vi.fn();
-    expect(() => so.defer(def)).toThrow(ReferenceError);
-    expect(def).not.toHaveBeenCalled();
   });
 });

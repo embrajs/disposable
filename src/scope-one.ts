@@ -1,16 +1,15 @@
-import { attachChild, detachChild, flushScope, moveScope, ScopeBase, throwDisposed } from "./core.ts";
+import { assertAlive, flushScope, type OnDisposeHook, ScopeBase } from "./core.ts";
+import { clearDevChildren, linkDevValue, unlinkDevValue } from "./dev.ts";
 import type { DisposableLike, ScopeOne, ScopeOptions } from "./types.ts";
-import { disposeEntry, isDisposable, type ScopeEntry } from "./utils.ts";
-
-const unlinkOne = <T>(s: ScopeOneImpl<T>): void => {
-  s.entry_ = null;
-};
+import { disposeEntry, isDisposable, type ScopeEntry, SYM_ON_DISPOSE } from "./utils.ts";
 
 function drainOne<T>(s: ScopeOneImpl<T>): unknown[] | undefined {
   const entry = s.entry_;
   if (entry) {
     s.entry_ = null;
-    detachChild(entry);
+    if (__DEV__) {
+      clearDevChildren(s);
+    }
     try {
       disposeEntry(entry);
     } catch (err) {
@@ -23,11 +22,7 @@ class ScopeOneImpl<T> extends ScopeBase implements ScopeOne<T> {
   entry_: ScopeEntry | null = null;
 
   constructor(options?: ScopeOptions) {
-    super(drainOne, options);
-  }
-
-  get [Symbol.toStringTag](): string {
-    return "ScopeOne";
+    super(drainOne, options, __DEV__ ? "scopeOne" : undefined);
   }
 
   get size(): 0 | 1 {
@@ -39,46 +34,38 @@ class ScopeOneImpl<T> extends ScopeBase implements ScopeOne<T> {
   }
 
   use<V extends (T & DisposableLike) | null | undefined>(value: V): V {
-    if (this.disposed_) {
-      throwDisposed(this);
-    }
+    assertAlive(this);
     const existing = this.entry_;
     if (value == null) {
-      if (existing) {
-        this.flush();
-      }
+      this.flush();
       return value;
     }
-    if (!existing || existing.f || !Object.is(existing.v, value)) {
-      if (existing) {
-        this.flush();
-      }
+    if (!existing || existing.f || existing.v !== value) {
+      this.flush();
       const entry: ScopeEntry = { v: value };
+      const hook = (value as { dispose?: Record<symbol, OnDisposeHook> }).dispose?.[SYM_ON_DISPOSE];
+      if (hook) {
+        const unsub = hook(() => {
+          if (this.entry_ === entry) {
+            this.entry_ = null;
+          }
+        });
+        if (!unsub) return value;
+        entry.u = unsub;
+      }
       this.entry_ = entry;
-      attachChild(this, entry, unlinkOne);
+      if (__DEV__) {
+        linkDevValue(this, value);
+      }
     }
     return value;
   }
 
   adopt<V extends T>(value: V, onDispose: (value: V) => void): V {
-    if (this.disposed_) {
-      throwDisposed(this);
-    }
-    if (this.entry_) {
-      this.flush();
-    }
+    assertAlive(this);
+    this.flush();
     this.entry_ = { v: value, f: onDispose };
     return value;
-  }
-
-  defer(onDispose: () => void): void {
-    if (this.disposed_) {
-      throwDisposed(this);
-    }
-    if (this.entry_) {
-      this.flush();
-    }
-    this.entry_ = { v: onDispose };
   }
 
   is(value: unknown): boolean {
@@ -89,26 +76,16 @@ class ScopeOneImpl<T> extends ScopeBase implements ScopeOne<T> {
     const entry = this.entry_;
     if (entry) {
       this.entry_ = null;
-      detachChild(entry);
+      entry.u?.();
+      if (__DEV__) {
+        unlinkDevValue(this, entry);
+      }
       return entry.v as T;
     }
   }
 
   flush(): void {
     flushScope(this, drainOne);
-  }
-
-  move(): ScopeOne<T> {
-    const next = new ScopeOneImpl<T>();
-    moveScope(this, next);
-    const entry = this.entry_;
-    if (entry) {
-      this.entry_ = null;
-      detachChild(entry);
-      next.entry_ = entry;
-      attachChild(next, entry, unlinkOne);
-    }
-    return next;
   }
 }
 

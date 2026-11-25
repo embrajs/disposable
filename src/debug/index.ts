@@ -12,7 +12,6 @@ export interface ScopeSnapshot {
   readonly children: ScopeSnapshot[];
   readonly createdAt?: string;
   readonly disposedAt?: string;
-  readonly disposedReason?: "disposed" | "moved";
 }
 
 /**
@@ -37,15 +36,6 @@ export interface LeakTracker extends Disposable {
   [Symbol.dispose](): void;
 }
 
-function inferKind(target: BaseScope): ScopeKind | "unknown" {
-  const tag = Object.prototype.toString.call(target);
-  if (tag === "[object Scope]") return "scope";
-  if (tag === "[object ScopeSet]") return "scopeSet";
-  if (tag === "[object ScopeMap]") return "scopeMap";
-  if (tag === "[object ScopeOne]") return "scopeOne";
-  return "unknown";
-}
-
 function inspectNode(target: BaseScope, visited: Set<object>): ScopeSnapshot {
   let meta: DevScopeMeta | undefined;
   if (__DEV__) {
@@ -62,7 +52,7 @@ function inspectNode(target: BaseScope, visited: Set<object>): ScopeSnapshot {
   }
   return {
     name: meta?.name,
-    kind: meta ? meta.kind : inferKind(target),
+    kind: meta ? meta.kind : "unknown",
     disposed: target.disposed,
     size: target.size,
     children,
@@ -70,7 +60,6 @@ function inspectNode(target: BaseScope, visited: Set<object>): ScopeSnapshot {
       ? {
           createdAt: meta.createdAt,
           ...(meta.disposedAt !== undefined ? { disposedAt: meta.disposedAt } : {}),
-          ...(meta.disposedReason !== undefined ? { disposedReason: meta.disposedReason } : {}),
         }
       : {}),
   };
@@ -85,7 +74,7 @@ export function inspect(target: BaseScope): ScopeSnapshot {
 
 function formatLine(node: ScopeSnapshot): string {
   const label = node.name ? `${node.name} (${node.kind})` : node.kind;
-  const status = node.disposed ? (node.disposedReason === "moved" ? "moved" : "disposed") : "alive";
+  const status = node.disposed ? "disposed" : "alive";
   return `${label} [${status}, size=${node.size}]`;
 }
 
@@ -162,7 +151,7 @@ export function createLeakTracker(): LeakTracker {
 }
 
 /**
- * Execute `fn` and report any scopes created during execution that were not disposed or moved.
+ * Execute `fn` and report any scopes created during execution that were not disposed.
  */
 export function trackLeaks<T>(fn: () => T): LeakReport<T> {
   const tracker = createLeakTracker();

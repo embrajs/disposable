@@ -2,42 +2,37 @@ import { describe, expect, it, vi } from "vitest";
 import { scope, scopeSet } from "../src/index.ts";
 
 describe("scopeSet", () => {
-  it("deduplicates entries across use, adopt, and defer and disposes in LIFO order", () => {
+  it("deduplicates entries across use and adopt and disposes in insertion order", () => {
     const order: string[] = [];
     const ss = scopeSet();
-    expect(Object.prototype.toString.call(ss)).toBe("[object ScopeSet]");
     expect(ss.size).toBe(0);
     expect(ss.signal.aborted).toBe(false);
 
     const fn = () => order.push("fn");
     const obj = { id: 1 };
-    const deferFn = () => order.push("defer");
 
     ss.use(fn);
     ss.use(fn); // duplicate ignored
     ss.use(null);
     ss.adopt(obj, (v) => order.push(`adopt:${v.id}`));
     ss.adopt(obj, () => order.push("duplicate-adopt")); // duplicate ignored
-    ss.defer(deferFn);
-    ss.defer(deferFn); // duplicate ignored
 
-    expect(ss.size).toBe(3);
+    expect(ss.size).toBe(2);
     expect(ss.has(fn)).toBe(true);
     expect(ss.has(obj)).toBe(true);
-    expect(ss.has(deferFn)).toBe(true);
     expect(ss.has({})).toBe(false);
 
     ss.dispose();
     expect(ss.disposed).toBe(true);
     expect(ss.signal.aborted).toBe(true);
     expect(ss.size).toBe(0);
-    expect(order).toEqual(["defer", "adopt:1", "fn"]);
+    expect(order).toEqual(["fn", "adopt:1"]);
 
     {
       using s = scopeSet();
-      s.defer(() => order.push("using"));
+      s.use(() => order.push("using"));
     }
-    expect(order).toEqual(["defer", "adopt:1", "fn", "using"]);
+    expect(order).toEqual(["fn", "adopt:1", "using"]);
   });
 
   it("accepts initial iterable and options", () => {
@@ -117,29 +112,15 @@ describe("scopeSet", () => {
     expect(ss.size).toBe(0);
   });
 
-  it("auto-detaches child scopes and supports move()", () => {
-    const ss1 = scopeSet();
-    const child = ss1.use(scope());
+  it("cascades to child scopes", () => {
+    const ss = scopeSet();
+    const child = ss.use(scope());
     const fn = vi.fn();
-    ss1.use(fn);
+    ss.use(fn);
 
-    const ss2 = ss1.move();
-    expect(ss1.disposed).toBe(true);
-    expect(ss2.size).toBe(2);
-
-    child.dispose();
-    expect(ss2.size).toBe(1);
-    expect(ss2.has(child)).toBe(false);
-
-    ss2.dispose();
+    ss.dispose();
+    expect(child.disposed).toBe(true);
     expect(fn).toHaveBeenCalledTimes(1);
-
-    // move empty
-    const empty1 = scopeSet();
-    const empty2 = empty1.move();
-    expect(empty1.disposed).toBe(true);
-    expect(empty2.size).toBe(0);
-    empty2.dispose();
   });
 
   it("throws ReferenceError after dispose", () => {
@@ -155,9 +136,5 @@ describe("scopeSet", () => {
     const clean = vi.fn();
     expect(() => ss.adopt("x", clean)).toThrow(ReferenceError);
     expect(clean).not.toHaveBeenCalled();
-
-    const def = vi.fn();
-    expect(() => ss.defer(def)).toThrow(ReferenceError);
-    expect(def).not.toHaveBeenCalled();
   });
 });
