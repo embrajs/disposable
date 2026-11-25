@@ -80,6 +80,33 @@ describe("scopeMap", () => {
     sm.flush();
   });
 
+  it("treats flush(undefined) as a targeted key flush, not a full flush", () => {
+    const sm = scopeMap<string | undefined>();
+    const fnOther = vi.fn();
+    const fnUndef = vi.fn();
+
+    sm.use("k1", fnOther);
+
+    // Calling flush(undefined) when undefined is not a key is a no-op
+    sm.flush(undefined);
+    expect(fnOther).not.toHaveBeenCalled();
+    expect(sm.size).toBe(1);
+
+    // Calling flush(undefined) when undefined is stored flushes only undefined
+    sm.use(undefined, fnUndef);
+    expect(sm.size).toBe(2);
+    sm.flush(undefined);
+    expect(fnUndef).toHaveBeenCalledTimes(1);
+    expect(fnOther).not.toHaveBeenCalled();
+    expect(sm.has(undefined)).toBe(false);
+    expect(sm.has("k1")).toBe(true);
+
+    // Calling flush() with no arguments flushes all remaining entries
+    sm.flush();
+    expect(fnOther).toHaveBeenCalledTimes(1);
+    expect(sm.size).toBe(0);
+  });
+
   it("auto-detaches child scopes and supports move()", () => {
     const sm1 = scopeMap<string>();
     const child = sm1.use("c", scope());

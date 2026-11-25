@@ -22,7 +22,9 @@
   "sideEffects": false,
   "files": [
     "src",
-    "dist"
+    "dist",
+    "skills",
+    "llms.txt"
   ],
   "scripts": {
     "prepublishOnly": "npm run build",
@@ -31,11 +33,11 @@
     "lint:ci": "biome ci",
     "ts-check": "tsc --noEmit",
     "ts-watch": "tsc --noEmit -w",
-    "docs": "typedoc --options typedoc.json && biome format --write --config-path=biome.docs.json --files-ignore-unknown=true docs",
+    "docs": "typedoc --options typedoc.json && biome format --write --config-path=biome.docs.json --files-ignore-unknown=true docs && export-size-svg && node scripts/gen-llms.ts docs/llms.txt",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ci": "vitest run --coverage --coverage.reportsDirectory='./docs/coverage'",
-    "build": "node scripts/build.ts",
+    "build": "node scripts/build.ts && node scripts/gen-llms.ts llms.txt",
     "build:min": "MINIFY=true node scripts/build.ts && echo '' && gzip-size dist/index.mjs",
     "check": "npm run lint:fix && npm run ts-check && npm run test:coverage && npm run build",
     "release": "commit-and-tag-version"
@@ -65,6 +67,7 @@
     "@wopjs/gzip-size": "^0.1.5",
     "commit-and-tag-version": "^13.3.0",
     "esbuild": "^0.27.7",
+    "export-size-svg": "^0.0.9",
     "typedoc": "^0.28.20",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vitest": "^5.1.0"

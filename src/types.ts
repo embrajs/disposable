@@ -11,7 +11,7 @@ export interface IDisposable {
 }
 
 /**
- * Any value that can be disposed: a cleanup function, a TC39 {@link Disposable}, or an {@link IDisposable}.
+ * Any value that can be disposed: a cleanup function, a TC39 `Disposable`, or an {@link IDisposable}.
  */
 export type DisposableLike = Disposer | Disposable | IDisposable;
 
@@ -109,12 +109,17 @@ export interface ScopeSet extends Scope {
   remove(value: unknown): boolean;
 
   /**
-   * Dispose and remove a specific resource, or all resources if omitted.
+   * Dispose and clear all currently managed resources without closing this scope.
    */
-  flush(value?: unknown): void;
+  flush(): void;
+  /**
+   * Dispose and remove a specific resource.
+   */
+  flush(value: unknown): void;
 
   /**
-   * Transfer all managed resources into a new `ScopeSet`, marking this scope as disposed.
+   * Transfer all managed resources (and any active `AbortSignal`) into a new `ScopeSet`,
+   * marking this scope as disposed.
    */
   move(): ScopeSet;
 }
@@ -162,12 +167,17 @@ export interface ScopeMap<K = unknown> extends BaseScope {
   remove(key: K): unknown;
 
   /**
-   * Dispose and remove the resource at `key`, or all resources if `key` is omitted.
+   * Dispose and clear all currently managed resources without closing this scope.
    */
-  flush(key?: K): void;
+  flush(): void;
+  /**
+   * Dispose and remove the resource at `key`.
+   */
+  flush(key: K): void;
 
   /**
-   * Transfer all managed resources into a new `ScopeMap`, marking this scope as disposed.
+   * Transfer all managed resources (and any active `AbortSignal`) into a new `ScopeMap`,
+   * marking this scope as disposed.
    */
   move(): ScopeMap<K>;
 }
@@ -215,7 +225,8 @@ export interface ScopeOne<T = unknown> extends BaseScope {
   remove(): T | undefined;
 
   /**
-   * Transfer the current resource into a new `ScopeOne`, marking this scope as disposed.
+   * Transfer the current resource (and any active `AbortSignal`) into a new `ScopeOne`,
+   * marking this scope as disposed.
    */
   move(): ScopeOne<T>;
 }

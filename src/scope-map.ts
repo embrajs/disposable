@@ -78,9 +78,11 @@ class ScopeMapImpl<K> extends ScopeBase implements ScopeMap<K>, MapScopeState<K>
     return removeMapEntry(this, key)?.v;
   }
 
+  flush(): void;
+  flush(key: K): void;
   flush(key?: K): void {
-    if (key !== undefined) {
-      flushMapKey(this, key);
+    if (arguments.length > 0) {
+      flushMapKey(this, key as K);
     } else {
       flushScope(this, drainMap);
     }

@@ -2,7 +2,7 @@ import { type DevScopeMeta, getDevRegistry } from "../dev.ts";
 import type { BaseScope, ScopeKind } from "../types.ts";
 
 /**
- * Non-intrusive snapshot of a disposal scope's state and child tree.
+ * Snapshot of a disposal scope's state and active child scopes.
  */
 export interface ScopeSnapshot {
   readonly name: string | undefined;
@@ -77,7 +77,7 @@ function inspectNode(target: BaseScope, visited: Set<object>): ScopeSnapshot {
 }
 
 /**
- * Capture a non-intrusive snapshot of a scope and its live child scopes.
+ * Capture a snapshot of a scope and its live child scopes.
  */
 export function inspect(target: BaseScope): ScopeSnapshot {
   return inspectNode(target, new Set());
@@ -102,7 +102,7 @@ function renderLines(node: ScopeSnapshot, prefix: string, isLast: boolean, isRoo
 }
 
 /**
- * Format a scope and its child tree as deterministic plain text for logs, tests, and AI agents.
+ * Format a scope and its child tree as a plain-text tree.
  */
 export function formatTree(target: BaseScope): string {
   const lines: string[] = [];

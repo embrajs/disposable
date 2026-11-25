@@ -64,8 +64,10 @@ class ScopeSetImpl extends ScopeBase implements ScopeSet, MapScopeState<unknown>
     return !!removeMapEntry(this, value);
   }
 
+  flush(): void;
+  flush(value: unknown): void;
   flush(value?: unknown): void {
-    if (value !== undefined) {
+    if (arguments.length > 0) {
       flushMapKey(this, value);
     } else {
       flushScope(this, drainMap);

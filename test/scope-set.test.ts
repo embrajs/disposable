@@ -90,6 +90,33 @@ describe("scopeSet", () => {
     ss.flush();
   });
 
+  it("treats flush(undefined) as a targeted flush, not a full flush", () => {
+    const ss = scopeSet();
+    const fnOther = vi.fn();
+    const fnUndef = vi.fn();
+
+    ss.use(fnOther);
+
+    // Calling flush(undefined) when undefined is not stored is a no-op
+    ss.flush(undefined);
+    expect(fnOther).not.toHaveBeenCalled();
+    expect(ss.size).toBe(1);
+
+    // Calling flush(undefined) when undefined is adopted flushes only undefined
+    ss.adopt(undefined, fnUndef);
+    expect(ss.size).toBe(2);
+    ss.flush(undefined);
+    expect(fnUndef).toHaveBeenCalledTimes(1);
+    expect(fnOther).not.toHaveBeenCalled();
+    expect(ss.has(undefined)).toBe(false);
+    expect(ss.has(fnOther)).toBe(true);
+
+    // Calling flush() with no arguments flushes all remaining entries
+    ss.flush();
+    expect(fnOther).toHaveBeenCalledTimes(1);
+    expect(ss.size).toBe(0);
+  });
+
   it("auto-detaches child scopes and supports move()", () => {
     const ss1 = scopeSet();
     const child = ss1.use(scope());

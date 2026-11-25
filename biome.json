@@ -22,6 +22,7 @@
         "noAssignInExpressions": "off"
       },
       "complexity": {
+        "noArguments": "off",
         "noUselessLoneBlockStatements": "off",
         "useOptionalChain": "off"
       }
